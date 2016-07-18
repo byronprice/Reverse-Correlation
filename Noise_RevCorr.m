@@ -1,4 +1,4 @@
-function [S,timeStamps,effectivePixels] = Noise_ReverseCorrelation(NoiseType,flipInterval,WaitTime)
+function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitTime)
 %Noise_ReverseCorrelation.m
 %   Display a series of white noise stimuli to infer the receptive fields
 %    of neurons using reverse correlation.
@@ -16,53 +16,63 @@ function [S,timeStamps,effectivePixels] = Noise_ReverseCorrelation(NoiseType,fli
 %  grey.  The stimuli will be output as the matrix S, along with the 
 %  timeStamps for when they were generated.
 %
-%INPUT:  Optional Inputs
+%INPUT: AnimalName - unique identifier for the animal as a number, e.g.
+%            12345
+%       Optional Inputs
 %       NoiseType - 'white' or 'pink' ... defaults to white
+%       DistToScreen - distance from the mouse to the screen, in
+%        centimeters
 %       flipInterval - time (milliseconds) to display the noise, then the
 %          grey screen ... the screen will flip from grey to noise to grey
 %          and each will display for flipInterval milliseconds
 %       WaitTime - time (milliseconds) during which microscope will record
 %          the visually-evoked response
 %
-%OUTPUT: S - matrix sized numStimuli-by-numPixels that represent each of
+%OUTPUT: file named 'NoiseStimDate_AnimalName.mat' , e.g. 
+%          NoiseStim20160718_12345.mat
+%       S - matrix sized numStimuli-by-numPixels that represent each of
 %          the stimuli presented, try 
 %          image = reshape(S(1,:),[width,height]); to view one of the white
 %          noise stimuli
-%        timeStamps - time stamps for each stimulus presentation using the
-%          GetSecs command from the PsychToolbox
 %        effectivePixels - effective width (and height) of the display window 
 %          in pixels, first chosen as the minimum of the width and height 
 %          of the current display ... the display is forced to be square
 %          and the width in effectivePixels is 1/4 the width in true screen
 %          pixels
+%        DistToScreen - as above
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/03/28
+% Updated: 2016/07/18
 % By: Byron Price
 
 switch nargin
-    case 0
-        NoiseType = 'white';
-        flipInterval = 200;
-        WaitTime = 150;
     case 1
+        NoiseType = 'white';
+        DistToScreen = 25;
         flipInterval = 200;
-        WaitTime = 150;
-    case 2 
-        WaitTime = 150;
+        WaitTime = 1000;
+    case 2
+        DistToScreen = 25;
+        flipInterval = 200;
+        WaitTime = 1000;
+    case 3
+        flipInterval = 200;
+        WaitTime = 1000;
+    case 4
+        WaitTime = 1000;
 end
 % Acquire a handle to OpenGL, so we can use OpenGL commands in our code:
 global GL;
-usb = usb1208FSPlusClass
-
-DistToScreen = 20; % in cm
+usb = usb1208FSPlusClass;
 
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-numStimuli = 2000;
-TimeEstimate = numStimuli*2*(flipInterval/1000)/60;
+flipInterval = flipInterval/1000;
+WaitTime = WaitTime/1000;
+numStimuli = 1500;
+TimeEstimate = numStimuli*(flipInterval+WaitTime)/60;
 display(sprintf('Estimated time is %.2f minutes.',TimeEstimate))
 WaitSecs(5);
 
@@ -108,36 +118,46 @@ else
     display('NoiseType must be ''white'' or ''pink'' as a string.')
     return;
 end
-time_date = datenum(datetime);
-filename = strcat('Noise_Stimuli-',datestr(time_date,30));
-save(filename,'S');
 
 Grey = 128*ones(minPix,minPix);
 timeStamps = zeros(numStimuli*2,1);
 
 Priority(9);
+% Retrieve monitor refresh duration
+ifi = Screen('GetFlipInterval', win);
+
+% usb.startRecording;
+WaitSecs(2);
+
 vbl = Screen('Flip', win);
-flipInterval = flipInterval/1000;
-WaitTime = WaitTime/1000;
-for tt=1:numStimuli*2
+for tt=1:numStimuli
     % Convert it to a texture 'tex':
-    if mod(tt,2) == 1
-        Img = Grey;
-    elseif mod(tt,2) == 0
-        Img = reshape(S(tt/2,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
-        Img = kron(double(Img),ones(screenPix_to_effPix));
-    end
+    Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
+    Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
     clear Img;
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win, vbl + flipInterval-0.015);timeStamps(tt) = GetSecs;
-    usb.triggerON(1,7);
-    usb.triggerOFF(1,7);
-    WaitSecs(WaitTime);
-    %usb.strobe;
+    vbl = Screen('Flip',win, vbl + ifi/2);%
+%     usb.strobe;
+    WaitSecs(flipInterval);vbl = vbl+flipInterval;
+
+    Img = Grey;
+    tex = Screen('MakeTexture',win,Img);
+    clear Img;
+    Screen('DrawTexture',win, tex);
+    vbl = Screen('Flip',win, vbl + ifi/2);
+%     usb.strobe;
+    WaitSecs(WaitTime);vbl = vbl+WaitTime;
     Screen('Close', tex);
 end
+% usb.stopRecording;
 % Close window
 Screen('CloseAll');
 Priority(0);
+
+cd('~/Documents/MATLAB/Byron/RetinoExp')
+Date = datetime('today','Format','yyyy-MM-dd');
+Date = char(Date); Date = strrep(Date,'-','');
+filename = strcat('NoiseStim',Date,'_',num2str(AnimalName),'.mat');
+save(filename,'S','numStimuli','effectivePixels','DistToScreen');
 end

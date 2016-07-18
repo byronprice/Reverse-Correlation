@@ -1,7 +1,7 @@
-function [F] = ReverseCorr_Analysis(AnimalName,Date)
+function [] = RevCorrEphys(AnimalName,Date,Chans)
 %ReverseCorr_Analysis.m
-%   %   Analysis of calcium-imaging data in response to a series of white
-%   noise stimuli (see WhiteNoise_ReverseCorrelation.m for Psychtoolbox
+%   %   Analysis of single unit recording data in response to a series of white
+%   noise stimuli (see Noise_ReverseCorrelation.m for Psychtoolbox
 %   stimulus)
 %    See Smyth et al. 2003 Receptive Field Organization ... We'll solve a
 %    matrix equation using a regularized pseudo-inverse technique.
@@ -17,7 +17,12 @@ function [F] = ReverseCorr_Analysis(AnimalName,Date)
 %  neurons in R whose responses were measured with calcium imaging during
 %  the display of the white noise stimuli in S.
 %
-%INPUT: 
+%INPUT: AnimalName - unique identifier for the animal as a number, e.g.
+%            12345
+%       Date - date of the experiment, e.g. 20160525
+%       Chans - channel numbers, input as [6,8], defaults to 6 and 8
+%    
+%      Input through saved file 'NoiseStimData_AnimalName.mat'
 %      S - number of stimuli-by-number of pixels matrix of white noise
 %        stimuli used by the function WhiteNoise_ReverseCorrelation.m
 %       R - matrix of size number of frames-by-number of neurons that
@@ -27,8 +32,7 @@ function [F] = ReverseCorr_Analysis(AnimalName,Date)
 %        numbers obtained from calcium imaging (count threshold
 %        crossings as spikes ... we will want to know the number of spikes
 %        in response to the onset and offset of each stimuli.
-%       timeStamps - timeStamps output from WhiteNoise_ReverseCorrelation.m
-%       Fs - sampling frequency of the calcium imaging recording in Hz 
+
 %OUTPUT: F - number of pixels-by-number of neurons matrix representing the
 %         receptive field for each neuron recorded from in R
 %            if N = sqrt(size(F,1));
@@ -63,31 +67,72 @@ function [F] = ReverseCorr_Analysis(AnimalName,Date)
 %  onset and that the calcium imaging recording started just in time 
 %  with the first stimulus (which was a grey screen)
 
-period = [30,60]; % period after stimulus to include for spike-triggered
-       % average stimulus (in milliseconds)
-startRecord = round(period(1)/1000*Fs);
-endRecord = round(period(2)/1000*Fs);
-numNeurons = size(R,2);
-numStimuli = size(S,1)*2;
+% read in the .plx file
 
-RR = zeros(numStimuli/2,numNeurons);
-for ii=1:numNeurons
-    Trace = square(R(:,ii));
-    currentIndex = 1;
-    for tt=2:numStimuli
-        interval = timeStamps(tt)-timeStamps(tt-1);
-        numFrames = interval*Fs;
-        currentIndex = currentIndex+numFrames;
-        response = sum(Trace(currentIndex+startRecord:currentIndex+endRecord));
-        if mod(tt,2) == 0
-            RR(tt/2,ii) = response;
-        elseif mod(tt,2) == 1
-            RR((tt-1)/2,ii) = -response;
+EphysFileName = strcat('NoiseData',num2str(Date),'_',num2str(AnimalName));
+
+if exist(strcat(EphysFileName,'.mat'),'file') ~= 2
+    MyReadall(EphysFileName);
+end
+
+StimulusFileName = strcat('NoiseStim',num2str(Date),'_',num2str(AnimalName),'.mat');
+EphysFileName = strcat(EphysFileName,'.mat');
+load(EphysFileName)
+load(StimulusFileName)
+
+if nargin < 3
+    Chans = [6,8];
+end
+
+sampleFreq = adfreq;
+
+% tsevs are the strobed times of stimulus onset, then offset
+%  Onset at tsevs{1,33}(2), offset at tsevs{1,33}(3), onset at
+%  tsevs{1,33}(4), offset at 5, etc.
+
+%x = find(~cellfun(@isempty,tsevs));
+strobeStart = 33;
+
+% lowpass filter the data
+dataLength = length(allad{1,strobeStart+Chans(1)-1});
+numChans = length(Chans);
+ChanData = zeros(dataLength,numChans);
+preAmpGain = 1/1000;
+for ii=1:numChans
+    voltage = ((allad{1,strobeStart+Chans(ii)-1}).*SlowPeakV)./(0.5*(2^SlowADResBits)*adgains(strobeStart+Chans(ii)-1)*preAmpGain);
+    temp = smooth(voltage,0.05*sampleFreq);
+    n = 30;
+    lowpass = 100/(sampleFreq/2); % fraction of Nyquist frequency
+    blo = fir1(n,lowpass,'low',hamming(n+1));
+    ChanData(:,ii) = filter(blo,1,temp);
+end
+
+timeStamps = 0:1/sampleFreq:dataLength/sampleFreq-1/sampleFreq;
+
+if length(timeStamps) ~= dataLength
+    display('Error: Review allad cell array and timing')
+    return;
+end
+strobeData = tsevs{1,strobeStart};
+stimLength = round((stimLen+0.3)*sampleFreq);
+
+% COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
+Response = zeros(numChans,numStimuli,stimLength);
+for ii=1:numChans
+    for jj=1:reps
+        check = (jj-1)*numStimuli+1:jj*numStimuli;
+        for kk=1:numStimuli
+            stimOnset = strobeData(check(kk));
+            [~,index] = min(abs(timeStamps-stimOnset));
+            temp = ChanData(index:index+stimLength-1,ii);
+            Response(ii,kk,jj,:) = temp;
         end
+        clear check;
     end
 end
 
 
+% CREATE LAPLACIAN MATRIX
 effectivePixels = size(S,2);
 N = sqrt(effectivePixels);
 L = zeros(effectivePixels,effectivePixels,'single');
@@ -139,6 +184,7 @@ end
 
 lambda = 10;
 % VERTICALLY CONCATENATE S and L
+% S is size numStimuli X effectivePixels
 A = [S;lambda.*L];
 F = zeros(effectivePixels,numNeurons);
 
@@ -146,21 +192,16 @@ F = zeros(effectivePixels,numNeurons);
 for ii=1:numNeurons
     r = RR(:,ii);
     constraints = [r;zeros(effectivePixels,1)];
+    % r = S*f ... constraints = A*f
+    [fhat,~,stats] = glmfit(A,constraints,'normal','constant','off');
+    %[fhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
     
-    %Singular Value Decomposition to solve
-    % linear system of equations for the receptive
-    % field of each neuron, f
-    % given a matrix A, solve
-    % Af = constraints for f
-    % first require U,S,V such that A = U*S*V'
-    [U,S,V] = svd(A);
-    % pseudo-inverse is then
-    Sinv = inv(S);
-    Ainv = V'*Sinv*U;
-    f = Ainv*constraints;
-    % alternatively 
-    % f = A\constraints;
-    F(:,ii) = f;
+    F(:,ii) = fhat;
 end
+end
+
+
+
+
 end
 
