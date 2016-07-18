@@ -159,5 +159,5 @@ cd('~/Documents/MATLAB/Byron/RetinoExp')
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');
 filename = strcat('NoiseStim',Date,'_',num2str(AnimalName),'.mat');
-save(filename,'S','numStimuli','effectivePixels','DistToScreen');
+save(filename,'S','numStimuli','effectivePixels','DistToScreen','screenPix_to_effPix','minPix');
 end

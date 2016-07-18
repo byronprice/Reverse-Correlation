@@ -63,7 +63,7 @@ function [] = RevCorrEphys(AnimalName,Date,Chans)
 %   normalize the response by that background firing rate, though this may
 %   not add anything
 
-% assume we want the period from 30msec to 60msec after stimulus
+% assume we want the period from 50msec to 120msec after stimulus
 %  onset and that the calcium imaging recording started just in time 
 %  with the first stimulus (which was a grey screen)
 
@@ -117,7 +117,7 @@ strobeData = tsevs{1,strobeStart};
 stimLength = round((stimLen+0.3)*sampleFreq);
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-Response = zeros(numChans,numStimuli,stimLength);
+Response = zeros(numChans,numNeurons,numStimuli,stimLength);
 for ii=1:numChans
     for jj=1:reps
         check = (jj-1)*numStimuli+1:jj*numStimuli;
@@ -186,22 +186,27 @@ lambda = 10;
 % VERTICALLY CONCATENATE S and L
 % S is size numStimuli X effectivePixels
 A = [S;lambda.*L];
-F = zeros(effectivePixels,numNeurons);
+F = zeros(numChans,numNeurons,effectivePixels);
 
 % REGULARIZED LEAST-SQUARES SOLUTION
-for ii=1:numNeurons
-    r = RR(:,ii);
-    constraints = [r;zeros(effectivePixels,1)];
-    % r = S*f ... constraints = A*f
-    [fhat,~,stats] = glmfit(A,constraints,'normal','constant','off');
-    %[fhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
-    
-    F(:,ii) = fhat;
+for ii=1:Chans
+    for jj=1:numNeurons
+        r = RR(:,ii);
+        constraints = [r;zeros(effectivePixels,1)];
+        % r = S*f ... constraints = A*f
+        [fhat,~,stats] = glmfit(A,constraints,'normal','constant','off');
+        %[rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
+        
+        F(ii,jj,:) = fhat;
+    end
 end
-end
-
-
-
+% Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
+% Img = kron(double(Img),ones(screenPix_to_effPix));
 
 end
+
+
+
+
+
 
