@@ -1,4 +1,4 @@
-function [] = RevCorrEphys(AnimalName,Date,Chans)
+function [] = RevCorrEphys(AnimalName,Date)
 %ReverseCorr_Analysis.m
 %   %   Analysis of single unit recording data in response to a series of white
 %   noise stimuli (see Noise_RevCorr.m for Psychtoolbox
@@ -42,7 +42,7 @@ function [] = RevCorrEphys(AnimalName,Date,Chans)
 %    
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/07/18
+% Updated: 2016/07/19
 % By: Byron Price
 
 % CREATE GIANT CONVOLUTION MATRIX TO TAKE DISCRETE
@@ -80,11 +80,8 @@ EphysFileName = strcat(EphysFileName,'.mat');
 load(EphysFileName)
 load(StimulusFileName)
 
-if nargin < 3
-    Chans = [6,8];
-end
-
-numChans = length(Chans);
+temp = ~cellfun(@isempty,allts);
+Chans = find(sum(temp,1));numChans = length(Chans);
 sampleFreq = adfreq;
 timeStamps = 0:1/sampleFreq:Duration+2/sampleFreq;
 
@@ -197,7 +194,8 @@ F = zeros(numChans,nunits1,effectivePixels);
 
 % REGULARIZED LEAST-SQUARES SOLUTION
 for ii=1:numChans
-    numNeurons = Neurons(ii,1);figure();plotRows = ceil(numNeurons/2);
+    numNeurons = Neurons(ii,1);
+    figure();plotRows = ceil(numNeurons/2);
     for jj=1:numNeurons
         r = squeeze(Response(ii,jj,:));
         constraints = [r;zeros(effectivePixels,1)];
