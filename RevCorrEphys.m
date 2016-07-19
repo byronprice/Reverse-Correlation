@@ -1,7 +1,7 @@
 function [] = RevCorrEphys(AnimalName,Date,Chans)
 %ReverseCorr_Analysis.m
 %   %   Analysis of single unit recording data in response to a series of white
-%   noise stimuli (see Noise_ReverseCorrelation.m for Psychtoolbox
+%   noise stimuli (see Noise_RevCorr.m for Psychtoolbox
 %   stimulus)
 %    See Smyth et al. 2003 Receptive Field Organization ... We'll solve a
 %    matrix equation using a regularized pseudo-inverse technique.
@@ -24,7 +24,7 @@ function [] = RevCorrEphys(AnimalName,Date,Chans)
 %    
 %      Input through saved file 'NoiseStimData_AnimalName.mat'
 %      S - number of stimuli-by-number of pixels matrix of white noise
-%        stimuli used by the function WhiteNoise_ReverseCorrelation.m
+%        stimuli used by the function Noise_RevCorr.m
 %       R - matrix of size number of frames-by-number of neurons that
 %        contains neuronal data which has already been processed into a
 %        point process and which will be converted to a new matrix of responses, 
@@ -84,7 +84,9 @@ if nargin < 3
     Chans = [6,8];
 end
 
+numChans = length(Chans);
 sampleFreq = adfreq;
+timeStamps = 0:1/sampleFreq:Duration+2/sampleFreq;
 
 % tsevs are the strobed times of stimulus onset, then offset
 %  Onset at tsevs{1,33}(2), offset at tsevs{1,33}(3), onset at
@@ -93,47 +95,52 @@ sampleFreq = adfreq;
 %x = find(~cellfun(@isempty,tsevs));
 strobeStart = 33;
 
-% lowpass filter the data
-dataLength = length(allad{1,strobeStart+Chans(1)-1});
-numChans = length(Chans);
-ChanData = zeros(dataLength,numChans);
-preAmpGain = 1/1000;
+temp = cell(numChans,nunits1);
 for ii=1:numChans
-    voltage = ((allad{1,strobeStart+Chans(ii)-1}).*SlowPeakV)./(0.5*(2^SlowADResBits)*adgains(strobeStart+Chans(ii)-1)*preAmpGain);
-    temp = smooth(voltage,0.05*sampleFreq);
-    n = 30;
-    lowpass = 100/(sampleFreq/2); % fraction of Nyquist frequency
-    blo = fir1(n,lowpass,'low',hamming(n+1));
-    ChanData(:,ii) = filter(blo,1,temp);
+    for jj=1:nunits1
+        if isempty(allts{jj,Chans(ii)}) == 0
+            temp{ii,jj} = allts{jj,Chans(ii)};
+        end
+    end
 end
+allts = temp;
+fullSpots = 1-cellfun(@isempty,allts);
+Neurons = sum(fullSpots,2);
 
-timeStamps = 0:1/sampleFreq:dataLength/sampleFreq-1/sampleFreq;
-
-if length(timeStamps) ~= dataLength
-    display('Error: Review allad cell array and timing')
-    return;
+% ASSUME THAT A RESPONSE TO A STIMULUS OFFSET IS THE SAME AS A RESPONSE TO
+%  THE NEGATIVE OF THAT IMAGE, image created with values from 0 to 255
+numStimuli = numStimuli*2;
+newS = zeros(numStimuli,size(S,2),'single');
+for ii=1:numStimuli
+    if mod(ii,2) == 1
+        newS(ii,:) = S(floor(ii/2)+1,:);
+    elseif mod(ii,2) == 0
+        newS(ii,:) = 255-S(ii/2,:);
+    end
 end
+clear S;
+
 strobeData = tsevs{1,strobeStart};
-stimLength = round((stimLen+0.3)*sampleFreq);
+stimLen = round(0.07*sampleFreq);
+stimStart = round(0.05*sampleFreq);
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-Response = zeros(numChans,numNeurons,numStimuli,stimLength);
+Response = zeros(numChans,nunits1,numStimuli);
 for ii=1:numChans
-    for jj=1:reps
-        check = (jj-1)*numStimuli+1:jj*numStimuli;
+    numNeurons = Neurons(ii,1);
+    for jj=1:numNeurons
         for kk=1:numStimuli
-            stimOnset = strobeData(check(kk));
-            [~,index] = min(abs(timeStamps-stimOnset));
-            temp = ChanData(index:index+stimLength-1,ii);
-            Response(ii,kk,jj,:) = temp;
+            stimOnset = strobeData(kk);
+            high = find(allts{ii,jj} > (stimOnset+stimStart));
+            low = find(allts{ii,jj} < (stimOnset+stimStart+stimLen));
+            temp = intersect(low,high);
+            Response(ii,jj,kk) = length(temp);
+            clear temp;
         end
-        clear check;
     end
 end
 
-
 % CREATE LAPLACIAN MATRIX
-effectivePixels = size(S,2);
 N = sqrt(effectivePixels);
 L = zeros(effectivePixels,effectivePixels,'single');
 for ii=1:effectivePixels
@@ -182,22 +189,32 @@ for ii=1:effectivePixels
     end   
 end
 
-lambda = 10;
+lambda = 1;
 % VERTICALLY CONCATENATE S and L
 % S is size numStimuli X effectivePixels
-A = [S;lambda.*L];
-F = zeros(numChans,numNeurons,effectivePixels);
+A = [newS;lambda.*L];
+F = zeros(numChans,nunits1,effectivePixels);
 
 % REGULARIZED LEAST-SQUARES SOLUTION
-for ii=1:Chans
+for ii=1:numChans
+    numNeurons = Neurons(ii,1);figure();plotRows = ceil(numNeurons/2);
     for jj=1:numNeurons
-        r = RR(:,ii);
+        r = squeeze(Response(ii,jj,:));
         constraints = [r;zeros(effectivePixels,1)];
-        % r = S*f ... constraints = A*f
-        [fhat,~,stats] = glmfit(A,constraints,'normal','constant','off');
-        %[rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
+%         r = newS*f ... constraints = A*f
+        [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
+%         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
         
+%         [U,S,V] = svd(newS); % svd(A)
+%         % pseudo-inverse is then
+%         Sinv = inv(S);
+%         Ainv = V'*Sinv*U;
+%         fhat = Ainv*r;
+        % alternatively
+%         fhat = newS\r;
+%         fhat = newS'*r/sum(r);
         F(ii,jj,:) = fhat;
+        subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
     end
 end
 % Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);

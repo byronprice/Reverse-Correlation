@@ -80,7 +80,7 @@ WaitSecs(5);
 screenid = max(Screen('Screens'));
 
 % Open a fullscreen onscreen window on that display,
-[win,~] = Screen('OpenWindow', screenid,0);
+[win,~] = Screen('OpenWindow', screenid,128);
 
 % Query window size in pixels
 [width, height] = Screen('WindowSize', win);
@@ -88,7 +88,7 @@ minPix = min(width,height);
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to 4x4 squares of on-screen pixels
-screenPix_to_effPix = 4;
+screenPix_to_effPix = 16;
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 numPixels = minPix*minPix;
 
@@ -120,15 +120,13 @@ else
 end
 
 Grey = 128*ones(minPix,minPix);
-timeStamps = zeros(numStimuli*2,1);
 
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
 
-% usb.startRecording;
+usb.startRecording;
 WaitSecs(2);
-
 vbl = Screen('Flip', win);
 for tt=1:numStimuli
     % Convert it to a texture 'tex':
@@ -138,7 +136,7 @@ for tt=1:numStimuli
     clear Img;
     Screen('DrawTexture',win, tex);
     vbl = Screen('Flip',win, vbl + ifi/2);%
-%     usb.strobe;
+    usb.strobe;
     WaitSecs(flipInterval);vbl = vbl+flipInterval;
 
     Img = Grey;
@@ -146,11 +144,11 @@ for tt=1:numStimuli
     clear Img;
     Screen('DrawTexture',win, tex);
     vbl = Screen('Flip',win, vbl + ifi/2);
-%     usb.strobe;
+    usb.strobe;
     WaitSecs(WaitTime);vbl = vbl+WaitTime;
     Screen('Close', tex);
 end
-% usb.stopRecording;
+usb.stopRecording;
 % Close window
 Screen('CloseAll');
 Priority(0);
@@ -159,5 +157,5 @@ cd('~/Documents/MATLAB/Byron/RetinoExp')
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');
 filename = strcat('NoiseStim',Date,'_',num2str(AnimalName),'.mat');
-save(filename,'S','numStimuli','effectivePixels','DistToScreen','screenPix_to_effPix','minPix');
+save(filename,'S','numStimuli','flipInterval','effectivePixels','DistToScreen','screenPix_to_effPix','minPix');
 end
