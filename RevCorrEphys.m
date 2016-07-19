@@ -121,7 +121,7 @@ end
 clear S;
 
 strobeData = tsevs{1,strobeStart};
-stimLen = round(0.07*sampleFreq);
+stimLen = round(0.08*sampleFreq);
 stimStart = round(0.05*sampleFreq);
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
@@ -201,7 +201,7 @@ for ii=1:numChans
     for jj=1:numNeurons
         r = squeeze(Response(ii,jj,:));
         constraints = [r;zeros(effectivePixels,1)];
-%         r = newS*f ... constraints = A*f
+% %         r = newS*f ... constraints = A*f
         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
 %         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
         
@@ -212,7 +212,7 @@ for ii=1:numChans
 %         fhat = Ainv*r;
         % alternatively
 %         fhat = newS\r;
-%         fhat = newS'*r/sum(r);
+%         fhat = newS(1:2:end,:)'*r/sum(r);
         F(ii,jj,:) = fhat;
         subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
     end

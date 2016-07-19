@@ -43,7 +43,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/07/18
+% Updated: 2016/07/19
 % By: Byron Price
 
 switch nargin
@@ -74,7 +74,7 @@ WaitTime = WaitTime/1000;
 numStimuli = 1500;
 TimeEstimate = numStimuli*(flipInterval+WaitTime)/60;
 display(sprintf('Estimated time is %.2f minutes.',TimeEstimate))
-WaitSecs(5);
+WaitSecs(10);
 
 % Choose screen with maximum id - the secondary display:
 screenid = max(Screen('Screens'));
@@ -83,26 +83,33 @@ screenid = max(Screen('Screens'));
 [win,~] = Screen('OpenWindow', screenid,128);
 
 % Query window size in pixels
-[width, height] = Screen('WindowSize', win);
-minPix = min(width,height);
+[w_pixels,h_pixels] = Screen('WindowSize', win);
+minPix = min(w_pixels,h_pixels);
+
+% screen size in millimeters and a conversion factor to get from mm to pixels
+[w_mm,h_mm] = Screen('DisplaySize',screenid);
+conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to 4x4 squares of on-screen pixels
-screenPix_to_effPix = 16;
+screenPix_to_effPix = 20;
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 numPixels = minPix*minPix;
 
 effectivePixels = numPixels/(screenPix_to_effPix*screenPix_to_effPix);
 % uniformly-distributed noise (Is Gaussian-distributed noise white?)
 if strcmp(NoiseType,'white') == 1
-    S = randi([0,255],[numStimuli,effectivePixels],'uint8');
+    S = random('Discrete Uniform',256,[numStimuli,effectivePixels])-1;
+%     S = randi([0,255],[numStimuli,effectivePixels],'uint8');
 elseif strcmp(NoiseType,'pink') == 1
-    S = randi([0,255],[numStimuli,effectivePixels],'uint8');
+    S = random('Discrete Uniform',256,[numStimuli,effectivePixels])-1;
     N = sqrt(effectivePixels);
+    % perform unit conversions
+    degPerPix = atan((minPix*conv_factor)/(DistToScreen*10))./N;
     for ii=1:numStimuli
         stim = reshape(S(ii,:),[N,N]);
         y = fft2(stim);
-        xfreq = (1./(1:N))./40;
+        xfreq = (1:N)./degPerPix; % ./40
         xfreq = bsxfun(@times,xfreq,ones(length(xfreq),1));
         yfreq = xfreq';
         mask = 1./sqrt(xfreq.^2+yfreq.^2);
@@ -112,7 +119,7 @@ elseif strcmp(NoiseType,'pink') == 1
         stim = reshape(stim,[N*N,1]);
         stim = stim-min(stim);
         stim = round(stim.*(255/max(stim)));
-        S(ii,:) = reshape(uint8(stim),[1,N*N]);
+        S(ii,:) = reshape(stim,[1,N*N]);
     end
 else 
     display('NoiseType must be ''white'' or ''pink'' as a string.')
@@ -157,5 +164,5 @@ cd('~/Documents/MATLAB/Byron/RetinoExp')
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');
 filename = strcat('NoiseStim',Date,'_',num2str(AnimalName),'.mat');
-save(filename,'S','numStimuli','flipInterval','effectivePixels','DistToScreen','screenPix_to_effPix','minPix');
+save(filename,'S','numStimuli','flipInterval','effectivePixels','DistToScreen','screenPix_to_effPix','minPix','NoiseType');
 end
