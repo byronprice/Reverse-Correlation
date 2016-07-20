@@ -19,7 +19,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 %INPUT: AnimalName - unique identifier for the animal as a number, e.g.
 %            12345
 %       Optional Inputs
-%       NoiseType - 'white' or 'pink' ... defaults to white
+%       NoiseType - 'white' or 'pink' or 'brown' ... defaults to brown
 %       DistToScreen - distance from the mouse to the screen, in
 %        centimeters
 %       flipInterval - time (milliseconds) to display the noise, then the
@@ -48,7 +48,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 
 switch nargin
     case 1
-        NoiseType = 'white';
+        NoiseType = 'brown';
         DistToScreen = 25;
         flipInterval = 200;
         WaitTime = 1000;
@@ -91,40 +91,46 @@ minPix = min(w_pixels,h_pixels);
 conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
-%  effective pixels, which project to 4x4 squares of on-screen pixels
+%  effective pixels, which project to larger squares of on-screen pixels
 screenPix_to_effPix = 20;
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 numPixels = minPix*minPix;
 
 effectivePixels = numPixels/(screenPix_to_effPix*screenPix_to_effPix);
-% uniformly-distributed noise (Is Gaussian-distributed noise white?)
+
+% GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
-    S = random('Discrete Uniform',256,[numStimuli,effectivePixels])-1;
-%     S = randi([0,255],[numStimuli,effectivePixels],'uint8');
+    beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
-    S = random('Discrete Uniform',256,[numStimuli,effectivePixels])-1;
-    N = sqrt(effectivePixels);
-    % perform unit conversions
-    degPerPix = atan((minPix*conv_factor)/(DistToScreen*10))./N;
-    for ii=1:numStimuli
-        stim = reshape(S(ii,:),[N,N]);
-        y = fft2(stim);
-        xfreq = (1:N).*degPerPix; % ./40
-        xfreq = bsxfun(@times,xfreq,ones(length(xfreq),1));
-        yfreq = xfreq';
-        mask = 1./sqrt(xfreq.^2+yfreq.^2);
-        mask = rot90(mask,2);
-        y = y.*mask;
-        stim = real(ifft2(y));
-        stim = reshape(stim,[1,N*N]);
-        stim = stim-min(stim);
-        stim = round(stim.*(255/max(stim)));
-        S(ii,:) = stim;
-    end
+    beta = -1;
+elseif strcmp(NoiseType,'brown') == 1
+    beta = -2;
 else 
     display('NoiseType must be ''white'' or ''pink'' as a string.')
     return;
 end
+
+S = zeros(numStimuli,effectivePixels);
+N = sqrt(effectivePixels);
+% perform unit conversions
+degPerPix = atan((minPix*conv_factor)/(DistToScreen*10))./N;
+% below pink noise from Jon Yearsley, 1/f noise generate spatial data
+DIM = [N,N];
+for ii=1:numStimuli
+    u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
+    u = repmat(u,1,DIM(2));
+    v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]/DIM(2);
+    v = repmat(v,DIM(1),1);
+    S_f = (u.^2 + v.^2).^(beta);
+    S_f(S_f==inf) = 0;
+    phi = rand(DIM);
+    x = ifft2(S_f.^0.5 .* (cos(2*pi*phi)+1i*sin(2*pi*phi)));
+    x = real(x);
+    x = x+abs(min(min(x)));
+    x = round((x./max(max(x))).*255);
+    S(ii,:) = reshape(x,[1,effectivePixels]);
+end
+
 
 Grey = 128*ones(minPix,minPix);
 

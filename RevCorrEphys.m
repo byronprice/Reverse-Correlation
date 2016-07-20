@@ -116,7 +116,7 @@ end
 clear S;
 
 strobeData = tsevs{1,strobeStart};
-stimLen = 0.08;
+stimLen = 0.05;
 stimStart = 0.05;
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
@@ -205,11 +205,12 @@ for ii=1:numChans
 %         fhat = pinv(newS)*r;
         % alternatively
 %         fhat = newS\r;
-          fhat = A\constraints;
+        fhat = A\constraints;
 %         fhat = newS(1:2:end,:)'*r(1:2:end)/sum(r(1:2:end));
 %         fhat = newS'*r./sum(r);
         F(ii,jj,:) = fhat;
         subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
+%         subplot(plotRows,2,jj);histogram(r);
     end
 end
 % Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
