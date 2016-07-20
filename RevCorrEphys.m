@@ -82,8 +82,6 @@ load(StimulusFileName)
 
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
-sampleFreq = adfreq;
-timeStamps = 0:1/sampleFreq:Duration+2/sampleFreq;
 
 % tsevs are the strobed times of stimulus onset, then offset
 %  Onset at tsevs{1,33}(2), offset at tsevs{1,33}(3), onset at
@@ -118,8 +116,8 @@ end
 clear S;
 
 strobeData = tsevs{1,strobeStart};
-stimLen = round(0.08*sampleFreq);
-stimStart = round(0.05*sampleFreq);
+stimLen = 0.08;
+stimStart = 0.05;
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
 Response = zeros(numChans,nunits1,numStimuli);
@@ -186,7 +184,7 @@ for ii=1:effectivePixels
     end   
 end
 
-lambda = 1;
+lambda = 1e4;
 % VERTICALLY CONCATENATE S and L
 % S is size numStimuli X effectivePixels
 A = [newS;lambda.*L];
@@ -200,17 +198,16 @@ for ii=1:numChans
         r = squeeze(Response(ii,jj,:));
         constraints = [r;zeros(effectivePixels,1)];
 % %         r = newS*f ... constraints = A*f
-        [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
+%         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
 %         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
         
-%         [U,S,V] = svd(newS); % svd(A)
-%         % pseudo-inverse is then
-%         Sinv = inv(S);
-%         Ainv = V'*Sinv*U;
-%         fhat = Ainv*r;
+%         fhat = pinv(A)*constraints;
+%         fhat = pinv(newS)*r;
         % alternatively
 %         fhat = newS\r;
-%         fhat = newS(1:2:end,:)'*r/sum(r);
+          fhat = A\constraints;
+%         fhat = newS(1:2:end,:)'*r(1:2:end)/sum(r(1:2:end));
+%         fhat = newS'*r./sum(r);
         F(ii,jj,:) = fhat;
         subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
     end

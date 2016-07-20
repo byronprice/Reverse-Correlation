@@ -109,17 +109,17 @@ elseif strcmp(NoiseType,'pink') == 1
     for ii=1:numStimuli
         stim = reshape(S(ii,:),[N,N]);
         y = fft2(stim);
-        xfreq = (1:N)./degPerPix; % ./40
+        xfreq = (1:N).*degPerPix; % ./40
         xfreq = bsxfun(@times,xfreq,ones(length(xfreq),1));
         yfreq = xfreq';
         mask = 1./sqrt(xfreq.^2+yfreq.^2);
         mask = rot90(mask,2);
         y = y.*mask;
         stim = real(ifft2(y));
-        stim = reshape(stim,[N*N,1]);
+        stim = reshape(stim,[1,N*N]);
         stim = stim-min(stim);
         stim = round(stim.*(255/max(stim)));
-        S(ii,:) = reshape(stim,[1,N*N]);
+        S(ii,:) = stim;
     end
 else 
     display('NoiseType must be ''white'' or ''pink'' as a string.')
