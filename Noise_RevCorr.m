@@ -43,7 +43,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/07/19
+% Updated: 2016/07/22
 % By: Byron Price
 
 switch nargin
@@ -139,27 +139,18 @@ Priority(9);
 ifi = Screen('GetFlipInterval', win);
 
 usb.startRecording;
-WaitSecs(2);
-vbl = Screen('Flip', win);
+WaitSecs(5);
 for tt=1:numStimuli
+    vbl = Screen('Flip', win);
     % Convert it to a texture 'tex':
     Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
     Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
     clear Img;
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win, vbl + ifi/2);%
-    usb.strobe;
-    WaitSecs(flipInterval);vbl = vbl+flipInterval;
-
-    Img = Grey;
-    tex = Screen('MakeTexture',win,Img);
-    clear Img;
-    Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win, vbl + ifi/2);
-    usb.strobe;
-    WaitSecs(WaitTime);vbl = vbl+WaitTime;
-    Screen('Close', tex);
+    vbl = Screen('Flip',win, vbl + ifi/2);usb.strobe;
+    vbl = Screen('Flip',win,vbl+ifi/2+flipInterval);usb.strobe;
+    vbl = Screen('Flip',win,vbl+ifi/2+WaitTime);
 end
 usb.stopRecording;
 % Close window
