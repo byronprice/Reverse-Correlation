@@ -101,10 +101,10 @@ strobeStart = 33;
 dataLength = length(allad{1,Chans(1)});
 
 ChanData = zeros(dataLength,numChans);
-preAmpGain = 1/1000;
+preAmpGain = 1;
 for ii=1:numChans
-    voltage = ((allad{1,Chans(ii)}).*SlowPeakV)./(0.5*(2^SlowADResBits)*adgains(Chans(ii))*preAmpGain);
-    temp = smooth(voltage,0.05*sampleFreq);
+    voltage = 1000.*((allad{1,Chans(ii)}).*SlowPeakV)./(0.5*(2^SlowADResBits)*adgains(Chans(ii))*preAmpGain);
+    temp = smooth(voltage,0.013*sampleFreq);
     n = 30;
     lowpass = 100/(sampleFreq/2); % fraction of Nyquist frequency
     blo = fir1(n,lowpass,'low',hamming(n+1));
