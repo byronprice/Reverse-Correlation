@@ -43,7 +43,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/07/22
+% Updated: 2016/07/27
 % By: Byron Price
 
 switch nargin
@@ -73,7 +73,7 @@ flipInterval = flipInterval/1000;
 WaitTime = WaitTime/1000;
 numStimuli = 1500;
 TimeEstimate = numStimuli*(flipInterval+WaitTime)/60;
-display(sprintf('Estimated time is %.2f minutes.',TimeEstimate))
+display(sprintf('\nEstimated time is %3.2f minutes.',TimeEstimate))
 WaitSecs(10);
 
 % Choose screen with maximum id - the secondary display:
@@ -148,9 +148,9 @@ for tt=1:numStimuli
     tex = Screen('MakeTexture',win,Img);
     clear Img;
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win, vbl + ifi/2);usb.strobe;
-    vbl = Screen('Flip',win,vbl+ifi/2+flipInterval);usb.strobe;
-    vbl = Screen('Flip',win,vbl+ifi/2+WaitTime);
+    vbl = Screen('Flip',win);usb.strobe;
+    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
+    vbl = Screen('Flip',win,vbl-ifi/2+WaitTime);
 end
 usb.stopRecording;
 % Close window
