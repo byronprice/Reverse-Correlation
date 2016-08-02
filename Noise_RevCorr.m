@@ -43,7 +43,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/07/27
+% Updated: 2016/08/01
 % By: Byron Price
 
 switch nargin
@@ -157,7 +157,7 @@ usb.stopRecording;
 Screen('CloseAll');
 Priority(0);
 
-cd('~/Documents/MATLAB/Byron/RetinoExp')
+cd('~/CloudStation/ByronExp/RetinoExp')
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');
 filename = strcat('NoiseStim',Date,'_',num2str(AnimalName),'.mat');
