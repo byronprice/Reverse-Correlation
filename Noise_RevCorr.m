@@ -1,5 +1,5 @@
-function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitTime)
-%Noise_ReverseCorrelation.m
+function [] = Noise_RevCorr(AnimalName,NoiseType)
+%Noise_RevCorr.m
 %   Display a series of white noise stimuli to infer the receptive fields
 %    of neurons using reverse correlation.
 %    See Smyth et al. 2003 Receptive Field Organization ...
@@ -20,17 +20,13 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 %            12345
 %       Optional Inputs
 %       NoiseType - 'white' or 'pink' or 'brown' ... defaults to brown
-%       DistToScreen - distance from the mouse to the screen, in
-%        centimeters
-%       flipInterval - time (milliseconds) to display the noise, then the
-%          grey screen ... the screen will flip from grey to noise to grey
-%          and each will display for flipInterval milliseconds
-%       WaitTime - time (milliseconds) during which microscope will record
-%          the visually-evoked response
+%
+%       see file NoiseVars.mat for more changeable presets
 %
 %OUTPUT: file named 'NoiseStimDate_AnimalName.mat' , e.g. 
 %          NoiseStim20160718_12345.mat
-%       S - matrix sized numStimuli-by-numPixels that represent each of
+%
+%        S - matrix sized numStimuli-by-numPixels that represent each of
 %          the stimuli presented, try 
 %          image = reshape(S(1,:),[width,height]); to view one of the white
 %          noise stimuli
@@ -39,28 +35,19 @@ function [] = Noise_RevCorr(AnimalName,NoiseType,DistToScreen,flipInterval,WaitT
 %          of the current display ... the display is forced to be square
 %          and the width in effectivePixels is 1/4 the width in true screen
 %          pixels
-%        DistToScreen - as above
+%        DistToScreen - 25 cm for now
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/08/01
+% Updated: 2016/08/02
 % By: Byron Price
+
+cd('~/CloudStation/ByronExp/RetinoExp')
+load('NoiseVars.mat');
 
 switch nargin
     case 1
-        NoiseType = 'brown';
-        DistToScreen = 25;
-        flipInterval = 200;
-        WaitTime = 1000;
-    case 2
-        DistToScreen = 25;
-        flipInterval = 200;
-        WaitTime = 1000;
-    case 3
-        flipInterval = 200;
-        WaitTime = 1000;
-    case 4
-        WaitTime = 1000;
+        NoiseType = 'pink';
 end
 % Acquire a handle to OpenGL, so we can use OpenGL commands in our code:
 global GL;
@@ -157,7 +144,6 @@ usb.stopRecording;
 Screen('CloseAll');
 Priority(0);
 
-cd('~/CloudStation/ByronExp/RetinoExp')
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');
 filename = strcat('NoiseStim',Date,'_',num2str(AnimalName),'.mat');
