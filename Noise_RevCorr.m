@@ -39,7 +39,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/08/02
+% Updated: 2016/08/03
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/RetinoExp')
@@ -145,7 +145,7 @@ Screen('CloseAll');
 Priority(0);
 
 Date = datetime('today','Format','yyyy-MM-dd');
-Date = char(Date); Date = strrep(Date,'-','');
-filename = strcat('NoiseStim',Date,'_',num2str(AnimalName),'.mat');
+Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
+filename = sprintf('NoiseStim%d_%d.mat',Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels','DistToScreen','screenPix_to_effPix','minPix','NoiseType');
 end
