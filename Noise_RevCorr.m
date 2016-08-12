@@ -39,7 +39,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/08/03
+% Updated: 2016/08/12
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/RetinoExp')
@@ -63,8 +63,13 @@ WaitSecs(10);
 % Choose screen with maximum id - the secondary display:
 screenid = max(Screen('Screens'));
 
-% Open a fullscreen onscreen window on that display,
-[win,~] = Screen('OpenWindow', screenid,128);
+% % Open a fullscreen onscreen window on that display, choose a background
+% % color of 127 = gray with 50% max intensity; 0 = black;255 = white
+background = 127;
+[win,~] = Screen('OpenWindow', screenid,background);
+
+gammaTable = makeGrayscaleGammaTable(gama,0,255);
+Screen('LoadNormalizedGammaTable',win,gammaTable);
 
 % Query window size in pixels
 [w_pixels,h_pixels] = Screen('WindowSize', win);
@@ -116,7 +121,7 @@ for ii=1:numStimuli
 end
 
 
-Grey = 128*ones(minPix,minPix);
+Grey = 127*ones(minPix,minPix);
 
 Priority(9);
 % Retrieve monitor refresh duration
@@ -145,5 +150,28 @@ Priority(0);
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%d_%d.mat',Date,AnimalName);
-save(filename,'S','numStimuli','flipInterval','effectivePixels','DistToScreen','screenPix_to_effPix','minPix','NoiseType');
+save(filename,'S','numStimuli','flipInterval','effectivePixels',...
+    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix');
 end
+
+function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
+% Generates a 256x3 gamma lookup table suitable for use with the
+% psychtoolbox Screen('LoadNormalizedGammaTable',win,gammaTable) command
+% 
+% gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
+%
+%   gamma defines the level of gamma correction (1.8 or 2.2 common)
+%   blackSetPoint should be the highest value that results in a non-unique
+%   luminance value on the monitor being used (sometimes values 0,1,2, all
+%   produce the same black pixel value; set to zero if this is not a
+%   concern)
+%   whiteSetPoint should be the lowest value that returns a non-unique
+%   luminance value (deal with any saturation at the high end)
+% 
+%   Both black and white set points should be defined on a 0:255 scale
+
+gamma = max([gamma 1e-4]); % handle zero gamma case
+gammaVals = linspace(blackSetPoint/255,whiteSetPoint/255,256).^(1./gamma);
+gammaTable = repmat(gammaVals(:),1,3);
+end
+
