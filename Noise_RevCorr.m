@@ -56,9 +56,6 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-flipInterval = flipInterval/1000;
-WaitTime = WaitTime/1000;
-numStimuli = 1500;
 TimeEstimate = numStimuli*(flipInterval+WaitTime)/60;
 display(sprintf('\nEstimated time is %3.2f minutes.',TimeEstimate))
 WaitSecs(10);
@@ -127,15 +124,16 @@ ifi = Screen('GetFlipInterval', win);
 
 usb.startRecording;
 WaitSecs(5);
+vbl = Screen('Flip',win);
 for tt=1:numStimuli
-    vbl = Screen('Flip', win);
+    vbl = Screen('Flip', win,vbl+ifi/2);
     % Convert it to a texture 'tex':
     Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
     Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
     clear Img;
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win);usb.strobe;
+    vbl = Screen('Flip',win,vbl+ifi/2);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTime);
 end
