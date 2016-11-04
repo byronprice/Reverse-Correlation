@@ -39,10 +39,10 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/08/12
+% Updated: 2016/09/14
 % By: Byron Price
 
-cd('~/CloudStation/ByronExp/RetinoExp')
+cd('~/CloudStation/ByronExp/Retino')
 load('NoiseVars.mat');
 
 switch nargin
@@ -95,7 +95,7 @@ elseif strcmp(NoiseType,'pink') == 1
 elseif strcmp(NoiseType,'brown') == 1
     beta = -2;
 else 
-    display('NoiseType must be ''white'' or ''pink'' as a string.')
+    display('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.')
     return;
 end
 
