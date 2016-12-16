@@ -1,4 +1,4 @@
-function [] = RevCorrLFP(AnimalName,Date)
+function [] = RevCorrLFP(AnimalName,Date,NoiseType)
 %RevCorrLFP.m
 %   %   Analysis of LFP recording data in response to a series of white
 %   noise stimuli (see Noise_RevCorr.m for Psychtoolbox
@@ -69,7 +69,7 @@ function [] = RevCorrLFP(AnimalName,Date)
 
 
 % read in the .plx file
-EphysFileName = strcat('NoiseData',num2str(Date),'_',num2str(AnimalName));
+EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName));
 
 if exist(strcat(EphysFileName,'.mat'),'file') ~= 2
     MyReadall(EphysFileName);

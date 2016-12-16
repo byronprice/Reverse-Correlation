@@ -1,7 +1,7 @@
-function [] = RevCorrUnits(AnimalName,Date)
+function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %RevCorrUnits.m
 %   %   Analysis of single unit recording data in response to a series of white
-%   noise stimuli (see Noise_RevCorr.m for Psychtoolbox
+%   or pink noise stimuli (see Noise_RevCorr.m for Psychtoolbox
 %   stimulus)
 %    See Smyth et al. 2003 Receptive Field Organization ... We'll solve a
 %    matrix equation using a regularized pseudo-inverse technique.
@@ -9,13 +9,13 @@ function [] = RevCorrUnits(AnimalName,Date)
 % Briefly, if the receptive field for a given neuron is described by a
 %  p-by-1 vector (p being the number of pixels), f, and the stimuli described
 %  by a s-by-p (s being the number of stimuli presented) matrix, S, and the 
-%  response of that neuron described by an s-by-1 vector, then we can write
+%  response of that neuron described by an s-by-1 vector, r, then we can write
 %  the responses in terms of the stimuli and the receptive field as 
 %  r = S * f .  We want to infer the spatial receptive field structure
 %  f, so we need S^-1 * r = S^-1 * S * f => f = S^-1 * r ... So, the
 %  following code will get the spatial receptive fields f for a series of 
-%  neurons in R whose responses were measured with calcium imaging during
-%  the display of the white noise stimuli in S.
+%  neurons whose responses were measured with single-unit recordings during
+%  the display of the white/pink noise stimuli in S.
 %
 %INPUT: AnimalName - unique identifier for the animal as a number, e.g.
 %            12345
@@ -69,7 +69,7 @@ function [] = RevCorrUnits(AnimalName,Date)
 
 % read in the .plx file
 
-EphysFileName = strcat('NoiseData',num2str(Date),'_',num2str(AnimalName));
+EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName));
 
 if exist(strcat(EphysFileName,'.mat'),'file') ~= 2
     MyReadall(EphysFileName);
@@ -184,7 +184,7 @@ for ii=1:effectivePixels
     end   
 end
 
-lambda = 1e4;
+lambda = 1e2;
 % VERTICALLY CONCATENATE S and L
 % S is size numStimuli X effectivePixels
 A = [newS;lambda.*L];
