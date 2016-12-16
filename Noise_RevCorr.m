@@ -120,7 +120,6 @@ for ii=1:numStimuli
     S(ii,:) = reshape(x,[1,effectivePixels]);
 end
 
-
 Grey = 127*ones(minPix,minPix);
 
 Priority(9);
