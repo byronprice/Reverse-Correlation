@@ -148,7 +148,7 @@ Priority(0);
 
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
-filename = sprintf('NoiseStim%d_%d.mat',Date,AnimalName);
+filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix');
 end

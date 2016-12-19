@@ -184,7 +184,7 @@ for ii=1:effectivePixels
     end   
 end
 
-lambda = 1e2;
+lambda = 1e4;
 % VERTICALLY CONCATENATE S and L
 % S is size numStimuli X effectivePixels
 A = [newS;lambda.*L];
