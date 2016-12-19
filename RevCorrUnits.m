@@ -42,7 +42,7 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %    
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/07/25
+% Updated: 2016/12/19
 % By: Byron Price
 
 % CREATE GIANT CONVOLUTION MATRIX TO TAKE DISCRETE
@@ -116,20 +116,21 @@ end
 clear S;
 
 strobeData = tsevs{1,strobeStart};
-stimLen = 0.05;
-stimStart = 0.05;
+stimLen = 0.25;
 
+totalTime = strobeData(end);
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
 Response = zeros(numChans,nunits1,numStimuli);
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
+        baseRate = length(allts{ii,jj})./totalTime;
         for kk=1:numStimuli
             stimOnset = strobeData(kk);
-            high = find(allts{ii,jj} > (stimOnset+stimStart));
-            low = find(allts{ii,jj} < (stimOnset+stimStart+stimLen));
+            high = find(allts{ii,jj} > (stimOnset));
+            low = find(allts{ii,jj} < (stimOnset+stimLen));
             temp = intersect(low,high);
-            Response(ii,jj,kk) = length(temp);
+            Response(ii,jj,kk) = length(temp)./stimLen-baseRate;
             clear temp;
         end
     end
