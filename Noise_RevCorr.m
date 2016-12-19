@@ -39,7 +39,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/09/14
+% Updated: 2016/12/19
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/Retino')
@@ -125,6 +125,8 @@ Grey = 127*ones(minPix,minPix);
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
+flipIntervals = flipInterval-0.1+exprnd(0.1,[numStimuli,1]);
+WaitTimes = WaitTime-0.1+exprnd(0.1,[numStimuli,1]);
 
 usb.startRecording;
 WaitSecs(5);
@@ -138,8 +140,8 @@ for tt=1:numStimuli
     clear Img;
     Screen('DrawTexture',win, tex);
     vbl = Screen('Flip',win,vbl+ifi/2);usb.strobe;
-    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
-    vbl = Screen('Flip',win,vbl-ifi/2+WaitTime);
+    vbl = Screen('Flip',win,vbl-ifi/2+flipIntervals(tt));usb.strobe;
+    vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
 end
 usb.stopRecording;
 % Close window
