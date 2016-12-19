@@ -125,7 +125,7 @@ Grey = 127*ones(minPix,minPix);
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
-flipIntervals = flipInterval-0.1+exprnd(0.1,[numStimuli,1]);
+flipIntervals = flipInterval-0.05+exprnd(0.05,[numStimuli,1]);
 WaitTimes = WaitTime-0.1+exprnd(0.1,[numStimuli,1]);
 
 usb.startRecording;
