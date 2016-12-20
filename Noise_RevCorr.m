@@ -19,7 +19,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %INPUT: AnimalName - unique identifier for the animal as a number, e.g.
 %            12345
 %       Optional Inputs
-%       NoiseType - 'white' or 'pink' or 'brown' ... defaults to brown
+%       NoiseType - 'white' or 'pink' or 'brown' ... defaults to pink
 %
 %       see file NoiseVars.mat for more changeable presets
 %
@@ -56,7 +56,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-TimeEstimate = numStimuli*(flipInterval+WaitTime)/60;
+TimeEstimate = numStimuli*(flipInterval+0.1+WaitTime+0.25)/60;
 display(sprintf('\nEstimated time is %3.2f minutes.',TimeEstimate))
 WaitSecs(10);
 
@@ -81,7 +81,7 @@ conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
-screenPix_to_effPix = 20;
+screenPix_to_effPix = 30;
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 numPixels = minPix*minPix;
 
@@ -99,33 +99,35 @@ else
     return;
 end
 
-S = zeros(numStimuli,effectivePixels);
+Grey = 127;
+S = zeros(numStimuli,effectivePixels,'uint8');
 N = sqrt(effectivePixels);
 % perform unit conversions
 degPerPix = atan((minPix*conv_factor)/(DistToScreen*10))./N;
 % below pink noise from Jon Yearsley, 1/f noise generate spatial data
 DIM = [N,N];
 for ii=1:numStimuli
-    u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
-    u = repmat(u,1,DIM(2));
-    v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]/DIM(2);
-    v = repmat(v,DIM(1),1);
-    S_f = (u.^2 + v.^2).^(beta);
+    u = 0:N-1;
+    [U,V] = meshgrid(u,u);
+    S_f = (U.^2+V.^2).^(beta);
     S_f(S_f==inf) = 0;
-    phi = rand(DIM);
-    x = ifft2(S_f.^0.5 .* (cos(2*pi*phi)+1i*sin(2*pi*phi)));
-    x = real(x);
-    x = x+abs(min(min(x)));
-    x = round((x./max(max(x))).*255);
-    S(ii,:) = reshape(x,[1,effectivePixels]);
+    S_f = S_f.^0.5;
+    noise = wgn(DIM(1),DIM(2),0);
+    Y = fft2(noise);
+    Y = Y.*S_f;
+    X = ifft2(Y);
+    X = real(X);
+    X = X-min(min(X));
+    X = (X./max(max(X))).*255;
+    y = reshape(X,[1,effectivePixels]);
+    meanVal = mean(y);difference = meanVal-Grey;
+    S(ii,:) = y-difference;
 end
-
-Grey = 127*ones(minPix,minPix);
 
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
-flipIntervals = flipInterval-0.05+exprnd(0.05,[numStimuli,1]);
+flipIntervals = flipInterval+exprnd(0.1,[numStimuli,1]);
 WaitTimes = WaitTime+exprnd(0.25,[numStimuli,1]);
 
 usb.startRecording;

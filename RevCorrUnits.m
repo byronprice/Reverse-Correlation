@@ -116,7 +116,7 @@ end
 clear S;
 
 strobeData = tsevs{1,strobeStart};
-stimLen = 0.25;
+stimLen = 0.15;
 
 totalTime = strobeData(end);
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
@@ -211,7 +211,7 @@ for ii=1:numChans
 %         fhat = newS'*r./sum(r);
         F(ii,jj,:) = fhat;
         subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
-        title(sprintf('Laplacian Map for Channel %d, Unit %d, Animal %d',ii,jj,AnimalName));
+        title(sprintf('Pseudo-Inverse: Chan %d, Unit %d, Animal %d',ii,jj,AnimalName));
 %         subplot(plotRows,2,jj);histogram(r);
     end
 end
@@ -226,7 +226,7 @@ for ii=1:numChans
         fhat = newS\r;
         F(ii,jj,:) = fhat;
         subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
-        title(sprintf('RevCorr Map for Channel %d, Unit %d, Animal %d',ii,jj,AnimalName));
+        title(sprintf('RevCorr: Chan %d, Unit %d, Animal %d',ii,jj,AnimalName));
     end
 end
 % Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
