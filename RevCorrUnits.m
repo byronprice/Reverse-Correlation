@@ -130,7 +130,7 @@ for ii=1:numChans
             high = find(allts{ii,jj} > (stimOnset));
             low = find(allts{ii,jj} < (stimOnset+stimLen));
             temp = intersect(low,high);
-            Response(ii,jj,kk) = length(temp)./stimLen-baseRate;
+            Response(ii,jj,kk) = (length(temp)./stimLen)./baseRate;
             clear temp;
         end
     end
