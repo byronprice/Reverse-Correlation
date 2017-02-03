@@ -72,10 +72,10 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName));
 
 if exist(strcat(EphysFileName,'.mat'),'file') ~= 2
-    MyReadall(EphysFileName);
+    readall(strcat(EphysFileName,'.plx'));pause(1);
 end
 
-StimulusFileName = strcat('NoiseStim',num2str(Date),'_',num2str(AnimalName),'.mat');
+StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 EphysFileName = strcat(EphysFileName,'.mat');
 load(EphysFileName)
 load(StimulusFileName)
@@ -88,7 +88,7 @@ Chans = find(sum(temp,1));numChans = length(Chans);
 %  tsevs{1,33}(4), offset at 5, etc.
 
 %x = find(~cellfun(@isempty,tsevs));
-strobeStart = 33;
+strobeStart = 3;
 
 temp = cell(numChans,nunits1);
 for ii=1:numChans
@@ -110,13 +110,14 @@ for ii=1:numStimuli
     if mod(ii,2) == 1
         newS(ii,:) = S(floor(ii/2)+1,:);
     elseif mod(ii,2) == 0
-        newS(ii,:) = 255-S(ii/2,:);
+        newS(ii,:) = S(ii/2,:); %255-S(ii/2,:)
     end
 end
 clear S;
 
+
 strobeData = tsevs{1,strobeStart};
-stimLen = 0.15;
+stimLen = 0.05;stimStart = 0.05;
 
 totalTime = strobeData(end);
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
@@ -124,13 +125,23 @@ Response = zeros(numChans,nunits1,numStimuli);
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
-        baseRate = length(allts{ii,jj})./totalTime;
+        baseRate = length(allts{ii,jj+1})./totalTime;
+        display(baseRate);
+%         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
         for kk=1:numStimuli
             stimOnset = strobeData(kk);
-            high = find(allts{ii,jj} > (stimOnset));
-            low = find(allts{ii,jj} < (stimOnset+stimLen));
+            high = find(allts{ii,jj+1} > (stimOnset+stimStart));
+            low = find(allts{ii,jj+1} < (stimOnset+stimStart+stimLen));
             temp = intersect(low,high);
-            Response(ii,jj,kk) = (length(temp)./stimLen)./baseRate;
+            
+            if mod(kk,2) == 1
+                Response(ii,jj,kk) = (length(temp)./stimLen)./baseRate-1;
+%                 plot((stimOnset+stimStart).*ones(round(Response(ii,jj,kk))+1,1),0:1:round(Response(ii,jj,kk)),'b');
+            elseif mod(kk,2) == 0
+                Response(ii,jj,kk) = -(length(temp)./stimLen)./baseRate+1;
+%                 plot((stimOnset+stimStart).*ones(-round(Response(ii,jj,kk))+1,1),round(Response(ii,jj,kk)):1:0,'b');
+            end
+            
             clear temp;
         end
     end
@@ -185,50 +196,56 @@ for ii=1:effectivePixels
     end   
 end
 
-lambda = 1e4;
-% VERTICALLY CONCATENATE S and L
-% S is size numStimuli X effectivePixels
-A = [newS;lambda.*L];
-F = zeros(numChans,nunits1,effectivePixels);
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
-for ii=1:numChans
-    numNeurons = Neurons(ii,1);
-    figure();plotRows = ceil(numNeurons/2);
-    for jj=1:numNeurons
-        r = squeeze(Response(ii,jj,:));
-        constraints = [r;zeros(effectivePixels,1)];
-% %         r = newS*f ... constraints = A*f
-%         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
-%         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
-        
-%         fhat = pinv(A)*constraints;
-%         fhat = pinv(newS)*r;
-        % alternatively
-%         fhat = newS\r;
-        fhat = A\constraints;
-%         fhat = newS(1:2:end,:)'*r(1:2:end)/sum(r(1:2:end));
-%         fhat = newS'*r./sum(r);
-        F(ii,jj,:) = fhat;
-        subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
-        title(sprintf('Pseudo-Inverse: Chan %d, Unit %d, Animal %d',ii,jj,AnimalName));
-%         subplot(plotRows,2,jj);histogram(r);
+degreesVisualSpace = degPerPix*screenPix_to_effPix*N;
+xaxis = linspace(-degreesVisualSpace/2,degreesVisualSpace/2,N);
+yaxis = linspace(-degreesVisualSpace/3,2*degreesVisualSpace/3,N);
+for lambda = [1e3,5e3,1e4,5e4]
+    % VERTICALLY CONCATENATE S and L
+    % S is size numStimuli X effectivePixels
+    A = [newS;lambda.*L];
+    F = zeros(numChans,nunits1,effectivePixels);
+    for ii=1:numChans
+        numNeurons = Neurons(ii,1);
+        for jj=1:numNeurons
+            figure();
+            r = squeeze(Response(ii,jj,:));
+            constraints = [r;zeros(effectivePixels,1)];
+            % %         r = newS*f ... constraints = A*f
+            %         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
+            %         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
+            
+            %         fhat = pinv(A)*constraints;
+            %         fhat = pinv(newS)*r;
+            % alternatively
+            %         fhat = newS\r;
+            fhat = A\constraints;
+            %         fhat = newS(1:2:end,:)'*r(1:2:end)/sum(r(1:2:end));
+            %         fhat = newS'*r./sum(r);
+            F(ii,jj,:) = fhat;
+            imagesc(xaxis,yaxis,reshape(fhat,[N,N]));set(gca,'YDir','normal');
+            title(sprintf('Lambda %3.1e, Animal %d',lambda,AnimalName));
+            xlabel('Horizontal Eccentricity (degrees of visual space)');
+            ylabel('Vertical Eccentricity (degrees of visual space)');
+            %         subplot(plotRows,2,jj);histogram(r);
+        end
     end
 end
 
 % REVERSE CORRELATION SOLUTION
-for ii=1:numChans
-    numNeurons = Neurons(ii,1);
-    figure();plotRows = ceil(numNeurons/2);
-    for jj=1:numNeurons
-        r = squeeze(Response(ii,jj,:));
-% %         r = newS*f
-        fhat = newS\r;
-        F(ii,jj,:) = fhat;
-        subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
-        title(sprintf('RevCorr: Chan %d, Unit %d, Animal %d',ii,jj,AnimalName));
-    end
-end
+% for ii=1:numChans
+%     numNeurons = Neurons(ii,1);
+%     figure();plotRows = ceil(numNeurons/2);
+%     for jj=1:numNeurons
+%         r = squeeze(Response(ii,jj,:));
+% % %         r = newS*f
+%         fhat = newS\r;
+%         F(ii,jj,:) = fhat;
+%         subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
+%         title(sprintf('RevCorr: Chan %d, Unit %d, Animal %d',ii,jj,AnimalName));
+%     end
+% end
 % Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
 % Img = kron(double(Img),ones(screenPix_to_effPix));
 

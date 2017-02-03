@@ -39,10 +39,10 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/12/19
+% Updated: 2017/02/03
 % By: Byron Price
 
-cd('~/CloudStation/ByronExp/Retino')
+cd('~/CloudStation/ByronExp/NoiseRetino')
 load('NoiseVars.mat');
 
 switch nargin
