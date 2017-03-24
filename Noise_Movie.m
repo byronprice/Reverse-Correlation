@@ -1,27 +1,16 @@
-function [] = Noise_RevCorr(AnimalName,NoiseType)
-%Noise_RevCorr.m
+function [] = Noise_Movie(AnimalName,NoiseType)
+%Noise_Movie.m
 %   Display a series of white noise stimuli to infer the receptive fields
-%    of neurons using reverse correlation.
+%    of neurons using reverse correlation or a GLM point process model
 %    See Smyth et al. 2003 Receptive Field Organization ...
 %
-% Briefly, if the receptive field for a given neuron is described by a
-%  p-by-1 vector (p being the number of pixels), f, and the stimuli described
-%  by a s-by-p (s being the number of stimuli presented) matrix, S, and the 
-%  response of that neuron described by an s-by-1 vector, then we can write
-%  the responses in terms of the stimuli and the receptive field as 
-%  r = S * f .  We want to infer the spatial receptive field structure
-%  f, so we need S^-1 * r = S^-1 * S * f => f = S^-1 * r ... So, the
-%  following code will present a series of white noise stimuli with each
-%  stimulus lasting flipInterval msec, followed by flipInterval msec of flat 
-%  grey.  The stimuli will be output as the matrix S, along with the 
-%  timeStamps for when they were generated.
 %
 %INPUT: AnimalName - unique identifier for the animal as a number, e.g.
 %            12345
 %       Optional Inputs
 %       NoiseType - 'white' or 'pink' or 'brown' ... defaults to pink
 %
-%       see file NoiseVars.mat for more changeable presets
+%       see file MovieNoiseVars.mat for more changeable presets
 %
 %OUTPUT: file named 'NoiseStimDate_AnimalName.mat' , e.g. 
 %          NoiseStim20160718_12345.mat
@@ -37,13 +26,13 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %          pixels
 %        DistToScreen - 25 cm for now
 %
-% Created: 2016/03/04, 24 Cummington, Boston
+% Created: 2017/03/24, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/02/03
+% Updated: 2017/03/24
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
-load('NoiseVars.mat');
+load('MovieNoiseVars.mat');
 
 switch nargin
     case 1
@@ -56,8 +45,9 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-TimeEstimate = numStimuli*(flipInterval+0.1+WaitTime+0.25)/60;
-display(sprintf('\nEstimated time is %3.2f minutes.',TimeEstimate))
+numStimuli = movieTime_Seconds/movie_FrameRate;
+
+fprintf('\nEstimated time is %3.2f minutes.',movieTime_Seconds/60);
 WaitSecs(10);
 
 % Choose screen with maximum id - the secondary display:
@@ -74,18 +64,23 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 % Query window size in pixels
 [w_pixels,h_pixels] = Screen('WindowSize', win);
 minPix = min(w_pixels,h_pixels);
+maxPix = max(w_pixels,h_pixels);
 
 % screen size in millimeters and a conversion factor to get from mm to pixels
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
 conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
+% perform unit conversions
+degPerPix = atand((1*conv_factor)/(DistToScreen*10));
+
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
 screenPix_to_effPix = 20;
+maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
 minPix = minPix-mod(minPix,screenPix_to_effPix);
-numPixels = minPix*minPix;
+numPixels = maxPix*minPix;
 
-effectivePixels = numPixels/(screenPix_to_effPix*screenPix_to_effPix);
+effectivePixels = [maxPix/screenPix_to_effPix,minPix/screenPix_to_effPix];
 
 % GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
@@ -95,56 +90,54 @@ elseif strcmp(NoiseType,'pink') == 1
 elseif strcmp(NoiseType,'brown') == 1
     beta = -2;
 else 
-    display('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.')
+    fprintf('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.');
     return;
 end
 
 Grey = 127;
-S = zeros(numStimuli,effectivePixels,'uint8');
-N = sqrt(effectivePixels);
-% perform unit conversions
-degPerPix = atand((1*conv_factor)/(DistToScreen*10));
-% below pink noise from Jon Yearsley, 1/f noise generate spatial data
-DIM = [N,N];
-for ii=1:numStimuli
-    u = 0:N-1;
-    [U,V] = meshgrid(u,u);
-    S_f = (U.^2+V.^2).^(beta);
-    S_f(S_f==inf) = 0;
-    S_f = S_f.^0.5;
-    noise = wgn(DIM(1),DIM(2),0);
-    Y = fft2(noise);
-    Y = Y.*S_f;
-    X = ifft2(Y);
-    X = real(X);
-    X = X-min(min(X));
-    X = (X./max(max(X))).*255;
-    y = reshape(X,[1,effectivePixels]);
-    meanVal = mean(y);difference = meanVal-Grey;
-    S(ii,:) = y-difference;
-end
+%S = zeros(effectivePixels(1),effectivePixels(2),numStimuli,'uint8');
+
+% below white/pink/brown noise from Jon Yearsley
+DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
+
+u = 0:(DIM(1)-1);v = 0:(DIM(2)-1);
+t = 0:(DIM(3)-1);
+[U,V,T] = meshgrid(u,v,t);
+S_f = (U.^2+V.^2+T.^2).^(beta);
+S_f(S_f==inf) = 0;
+S_f = S_f.^0.5;
+noise = randn([DIM(1),DIM(2),DIM(3)]);
+Y = fftn(noise);
+Y = Y.*S_f;
+X = ifftn(Y);
+X = X.*conj(X);
+X = X-min(min(X));
+X = (X./max(max(X))).*255;
+meanVal = mean(mean(mean(X)));difference = meanVal-Grey;
+S = X-difference;
+S = uint8(S);
 
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
-flipIntervals = flipInterval+exprnd(0.1,[numStimuli,1]);
-WaitTimes = WaitTime+exprnd(0.25,[numStimuli,1]);
+% flipIntervals = flipInterval+exprnd(0.1,[numStimuli,1]);
+% WaitTimes = WaitTime+exprnd(0.25,[numStimuli,1]);
+flipInterval = 1/movie_FrameRate;
 
 usb.startRecording;
 WaitSecs(5);
-vbl = Screen('Flip',win);
-for tt=1:numStimuli
-    vbl = Screen('Flip', win,vbl+ifi/2);
+tt = 1;
+vbl = Screen('Flip', win);
+while tt <= numStimuli
     % Convert it to a texture 'tex':
-    Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
-    Img = kron(double(Img),ones(screenPix_to_effPix));
+    Img = kron(double(S(:,:,tt)),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
-    clear Img;
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win,vbl+ifi/2);usb.strobe;
-    vbl = Screen('Flip',win,vbl-ifi/2+flipIntervals(tt));usb.strobe;
-    vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
+    vbl = Screen('Flip',win);usb.strobe;
+    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);
+    tt = tt+1;
 end
+WaitSecs(2);
 usb.stopRecording;
 % Close window
 Screen('CloseAll');
@@ -152,8 +145,8 @@ Priority(0);
 
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
-filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
-save(filename,'S','numStimuli','flipInterval','effectivePixels',...
+filename = sprintf('NoiseMovieStim%s%d_%d.mat',NoiseType,Date,AnimalName);
+save(filename,'S','numStimuli','movie_FrameRate','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix');
 end
 
@@ -177,4 +170,3 @@ gamma = max([gamma 1e-4]); % handle zero gamma case
 gammaVals = linspace(blackSetPoint/255,whiteSetPoint/255,256).^(1./gamma);
 gammaTable = repmat(gammaVals(:),1,3);
 end
-

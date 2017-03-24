@@ -42,7 +42,7 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %    
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2016/12/19
+% Updated: 2017/02/03
 % By: Byron Price
 
 % CREATE GIANT CONVOLUTION MATRIX TO TAKE DISCRETE
@@ -122,11 +122,12 @@ stimLen = 0.05;stimStart = 0.05;
 totalTime = strobeData(end);
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
 Response = zeros(numChans,nunits1,numStimuli);
+baseRate = zeros(numChans,nunits1);
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
-        baseRate = length(allts{ii,jj+1})./totalTime;
-        display(baseRate);
+        baseRate(ii,jj) = length(allts{ii,jj+1})./totalTime;
+        display(baseRate(ii,jj));
 %         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
         for kk=1:numStimuli
             stimOnset = strobeData(kk);
@@ -135,10 +136,10 @@ for ii=1:numChans
             temp = intersect(low,high);
             
             if mod(kk,2) == 1
-                Response(ii,jj,kk) = (length(temp)./stimLen)./baseRate-1;
+                Response(ii,jj,kk) = (length(temp)./stimLen)./baseRate(ii,jj)-1;
 %                 plot((stimOnset+stimStart).*ones(round(Response(ii,jj,kk))+1,1),0:1:round(Response(ii,jj,kk)),'b');
             elseif mod(kk,2) == 0
-                Response(ii,jj,kk) = -(length(temp)./stimLen)./baseRate+1;
+                Response(ii,jj,kk) = -(length(temp)./stimLen)./baseRate(ii,jj)+1;
 %                 plot((stimOnset+stimStart).*ones(-round(Response(ii,jj,kk))+1,1),round(Response(ii,jj,kk)):1:0,'b');
             end
             
@@ -201,7 +202,7 @@ end
 degreesVisualSpace = degPerPix*screenPix_to_effPix*N;
 xaxis = linspace(-degreesVisualSpace/2,degreesVisualSpace/2,N);
 yaxis = linspace(-degreesVisualSpace/3,2*degreesVisualSpace/3,N);
-for lambda = [1e3,5e3,1e4,5e4]
+for lambda = [5e3,1e4,2.5e4,5e4]
     % VERTICALLY CONCATENATE S and L
     % S is size numStimuli X effectivePixels
     A = [newS;lambda.*L];
@@ -225,7 +226,7 @@ for lambda = [1e3,5e3,1e4,5e4]
             %         fhat = newS'*r./sum(r);
             F(ii,jj,:) = fhat;
             imagesc(xaxis,yaxis,reshape(fhat,[N,N]));set(gca,'YDir','normal');
-            title(sprintf('Lambda %3.1e, Animal %d',lambda,AnimalName));
+            title(sprintf('Lambda %3.1e, Base Firing %3.1f',lambda,baseRate(ii,jj)));
             xlabel('Horizontal Eccentricity (degrees of visual space)');
             ylabel('Vertical Eccentricity (degrees of visual space)');
             %         subplot(plotRows,2,jj);histogram(r);
