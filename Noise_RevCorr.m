@@ -56,7 +56,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-TimeEstimate = numStimuli*(flipInterval+0.1+WaitTime+0.25)/60;
+TimeEstimate = numStimuli*(flipInterval+0.1+WaitTime+0.2)/60;
 display(sprintf('\nEstimated time is %3.2f minutes.',TimeEstimate))
 WaitSecs(10);
 
@@ -91,9 +91,9 @@ effectivePixels = numPixels/(screenPix_to_effPix*screenPix_to_effPix);
 if strcmp(NoiseType,'white') == 1
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -1;
-elseif strcmp(NoiseType,'brown') == 1
     beta = -2;
+elseif strcmp(NoiseType,'brown') == 1
+    beta = -4;
 else 
     display('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.')
     return;
@@ -107,16 +107,15 @@ degPerPix = atand((1*conv_factor)/(DistToScreen*10));
 % below pink noise from Jon Yearsley, 1/f noise generate spatial data
 DIM = [N,N];
 for ii=1:numStimuli
-    u = 0:N-1;
+    u = 0:(N-1);
     [U,V] = meshgrid(u,u);
-    S_f = (U.^2+V.^2).^(beta);
-    S_f(S_f==inf) = 0;
-    S_f = S_f.^0.5;
+    S_f = (U.^2+V.^2).^(beta/2);
+    S_f(S_f==inf) = 1;
     noise = wgn(DIM(1),DIM(2),0);
     Y = fft2(noise);
     Y = Y.*S_f;
     X = ifft2(Y);
-    X = real(X);
+    X = sqrt(X.*conj(X)); % real(X)
     X = X-min(min(X));
     X = (X./max(max(X))).*255;
     y = reshape(X,[1,effectivePixels]);
@@ -129,24 +128,23 @@ Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
 flipIntervals = flipInterval+exprnd(0.1,[numStimuli,1]);
-WaitTimes = WaitTime+exprnd(0.25,[numStimuli,1]);
+WaitTimes = WaitTime+exprnd(0.2,[numStimuli,1]);
 
 usb.startRecording;
 WaitSecs(5);
 vbl = Screen('Flip',win);
 for tt=1:numStimuli
-    vbl = Screen('Flip', win,vbl+ifi/2);
     % Convert it to a texture 'tex':
     Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
     Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
-    clear Img;
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win,vbl+ifi/2);usb.strobe;
+    vbl = Screen('Flip',win);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+flipIntervals(tt));usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
     Screen('Close',tex);
 end
+pause(1);
 usb.stopRecording;
 % Close window
 Screen('CloseAll');
@@ -155,8 +153,8 @@ Priority(0);
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
-save(filename,'S','numStimuli','flipInterval','effectivePixels',...
-    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix');
+save(filename,'S','numStimuli','flipIntervals','effectivePixels',...
+    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix','WaitTimes');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)

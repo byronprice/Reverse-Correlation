@@ -45,7 +45,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-numStimuli = 1000; %movieTime_Seconds*movie_FrameRate;
+numStimuli = 1000;%movieTime_Seconds*movie_FrameRate;
 
 fprintf('\nEstimated time is %3.2f minutes.',movieTime_Seconds/60);
 WaitSecs(10);
@@ -71,10 +71,10 @@ maxPix = max(w_pixels,h_pixels)-250;
 conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % perform unit conversions
-degPerPix = atand((1*conv_factor)/(DistToScreen*10));
 
-horzDegrees = atand((maxPix*conv_factor)/(DistToScreen*10));
-vertDegrees = atand((minPix*conv_factor)/(DistToScreen*10));
+
+% horzDegrees = atand((maxPix*conv_factor)/(DistToScreen*10));
+% vertDegrees = atand((minPix*conv_factor)/(DistToScreen*10));
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
@@ -85,11 +85,13 @@ numPixels = maxPix*minPix;
 
 effectivePixels = [maxPix/screenPix_to_effPix,minPix/screenPix_to_effPix];
 
+degPerPix = atand((screenPix_to_effPix*conv_factor)/(DistToScreen*10));
+
 % GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -3;
+    beta = -2.5;
 elseif strcmp(NoiseType,'brown') == 1
     beta = -6;
 else 
@@ -103,23 +105,24 @@ Grey = 127;
 % below white/pink/brown noise from Jon Yearsley
 DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 
-u = linspace(0,horzDegrees,DIM(1));v = linspace(0,vertDegrees,DIM(2));
-t = linspace(0,1/movie_FrameRate,numStimuli);
+u = 0:(DIM(1)-1);v = 0:(DIM(2)-1);
+t = 0:(DIM(3)-1);
 [U,V,T] = meshgrid(u,v,t);
 S_f = single((U.^2+V.^2+T.^2).^(beta/2));
-clear U V T;
+clear U V T u v t;
 S_f(S_f==inf) = 1;
 % S_f = S_f.^0.5;
 noise = randn([DIM(2),DIM(1),DIM(3)],'single');
 Y = fftn(noise);
 Y = Y.*S_f;
 X = ifftn(Y);
-%X = X.*conj(X);
-X = real(X);
+X = sqrt(X.*conj(X));
+%X = real(X);
 X = X-min(min(min(X)));
 X = (X./max(max(max(X)))).*255;
 meanVal = mean(mean(mean(X)));difference = meanVal-Grey;
 S = X-difference;
+clear X Y S_f;WaitSecs(0.5);
 S = uint8(S);
 
 Priority(9);
