@@ -81,7 +81,7 @@ conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
-screenPix_to_effPix = 20;
+screenPix_to_effPix = 25;
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 numPixels = minPix*minPix;
 
@@ -123,6 +123,7 @@ for ii=1:numStimuli
     meanVal = mean(y);difference = meanVal-Grey;
     S(ii,:) = y-difference;
 end
+S = uint8(S);
 
 Priority(9);
 % Retrieve monitor refresh duration
@@ -144,6 +145,7 @@ for tt=1:numStimuli
     vbl = Screen('Flip',win,vbl+ifi/2);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+flipIntervals(tt));usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
+    Screen('Close',tex);
 end
 usb.stopRecording;
 % Close window

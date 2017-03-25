@@ -1,6 +1,6 @@
 function [] = Noise_Movie(AnimalName,NoiseType)
 %Noise_Movie.m
-%   Display a series of white noise stimuli to infer the receptive fields
+%   Display a movie of noise stimuli to infer the receptive fields
 %    of neurons using reverse correlation or a GLM point process model
 %    See Smyth et al. 2003 Receptive Field Organization ...
 %
@@ -45,7 +45,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-numStimuli = movieTime_Seconds/movie_FrameRate;
+numStimuli = 1000; %movieTime_Seconds*movie_FrameRate;
 
 fprintf('\nEstimated time is %3.2f minutes.',movieTime_Seconds/60);
 WaitSecs(10);
@@ -64,7 +64,7 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 % Query window size in pixels
 [w_pixels,h_pixels] = Screen('WindowSize', win);
 minPix = min(w_pixels,h_pixels);
-maxPix = max(w_pixels,h_pixels);
+maxPix = max(w_pixels,h_pixels)-250;
 
 % screen size in millimeters and a conversion factor to get from mm to pixels
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
@@ -73,9 +73,12 @@ conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 % perform unit conversions
 degPerPix = atand((1*conv_factor)/(DistToScreen*10));
 
+horzDegrees = atand((maxPix*conv_factor)/(DistToScreen*10));
+vertDegrees = atand((minPix*conv_factor)/(DistToScreen*10));
+
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
-screenPix_to_effPix = 20;
+screenPix_to_effPix = 30;
 maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 numPixels = maxPix*minPix;
@@ -86,11 +89,11 @@ effectivePixels = [maxPix/screenPix_to_effPix,minPix/screenPix_to_effPix];
 if strcmp(NoiseType,'white') == 1
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -1;
+    beta = -3;
 elseif strcmp(NoiseType,'brown') == 1
-    beta = -2;
+    beta = -6;
 else 
-    fprintf('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.');
+    fprintf('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.\n');
     return;
 end
 
@@ -100,19 +103,21 @@ Grey = 127;
 % below white/pink/brown noise from Jon Yearsley
 DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 
-u = 0:(DIM(1)-1);v = 0:(DIM(2)-1);
-t = 0:(DIM(3)-1);
+u = linspace(0,horzDegrees,DIM(1));v = linspace(0,vertDegrees,DIM(2));
+t = linspace(0,1/movie_FrameRate,numStimuli);
 [U,V,T] = meshgrid(u,v,t);
-S_f = (U.^2+V.^2+T.^2).^(beta);
-S_f(S_f==inf) = 0;
-S_f = S_f.^0.5;
-noise = randn([DIM(1),DIM(2),DIM(3)]);
+S_f = single((U.^2+V.^2+T.^2).^(beta/2));
+clear U V T;
+S_f(S_f==inf) = 1;
+% S_f = S_f.^0.5;
+noise = randn([DIM(2),DIM(1),DIM(3)],'single');
 Y = fftn(noise);
 Y = Y.*S_f;
 X = ifftn(Y);
-X = X.*conj(X);
-X = X-min(min(X));
-X = (X./max(max(X))).*255;
+%X = X.*conj(X);
+X = real(X);
+X = X-min(min(min(X)));
+X = (X./max(max(max(X)))).*255;
 meanVal = mean(mean(mean(X)));difference = meanVal-Grey;
 S = X-difference;
 S = uint8(S);
@@ -130,12 +135,12 @@ tt = 1;
 vbl = Screen('Flip', win);
 while tt <= numStimuli
     % Convert it to a texture 'tex':
-    Img = kron(double(S(:,:,tt)),ones(screenPix_to_effPix));
+    Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win);usb.strobe;
-    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);
+    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
     tt = tt+1;
+    Screen('Close',tex);
 end
 WaitSecs(2);
 usb.stopRecording;
@@ -146,7 +151,7 @@ Priority(0);
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat',NoiseType,Date,AnimalName);
-save(filename,'S','numStimuli','movie_FrameRate','effectivePixels',...
+save(filename,'S','numStimuli','movie_FrameRate','effectivePixels','movieTime_Seconds',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix');
 end
 
