@@ -45,7 +45,8 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-numStimuli = 1000;%movieTime_Seconds*movie_FrameRate;
+downSampleFactor = 1;
+numStimuli = movieTime_Seconds*movie_FrameRate*downSampleFactor;
 
 fprintf('\nEstimated time is %3.2f minutes.',movieTime_Seconds/60);
 WaitSecs(10);
@@ -91,7 +92,7 @@ degPerPix = atand((screenPix_to_effPix*conv_factor)/(DistToScreen*10));
 if strcmp(NoiseType,'white') == 1
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -2.5;
+    beta = -1;
 elseif strcmp(NoiseType,'brown') == 1
     beta = -6;
 else 
@@ -123,7 +124,8 @@ X = (X./max(max(max(X)))).*255;
 meanVal = mean(mean(mean(X)));difference = meanVal-Grey;
 S = X-difference;
 clear X Y S_f;WaitSecs(0.5);
-S = uint8(S);
+S = uint8(S(:,:,1:downSampleFactor:end));
+numStimuli = numStimuli/downSampleFactor;
 
 Priority(9);
 % Retrieve monitor refresh duration
