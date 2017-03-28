@@ -58,7 +58,7 @@ AssertOpenGL;
 
 TimeEstimate = numStimuli*(flipInterval+0.1+WaitTime+0.2)/60;
 display(sprintf('\nEstimated time is %3.2f minutes.',TimeEstimate))
-WaitSecs(10);
+WaitSecs(5);
 
 % Choose screen with maximum id - the secondary display:
 screenid = max(Screen('Screens'));
@@ -92,6 +92,7 @@ if strcmp(NoiseType,'white') == 1
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
     beta = -2;
+    spaceExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
     beta = -4;
 else 
@@ -109,7 +110,7 @@ DIM = [N,N];
 for ii=1:numStimuli
     u = 0:(N-1);
     [U,V] = meshgrid(u,u);
-    S_f = (U.^2+V.^2).^(beta/2);
+    S_f = (U.^spaceExp+V.^spaceExp).^(beta/2);
     S_f(S_f==inf) = 1;
     noise = wgn(DIM(1),DIM(2),0);
     Y = fft2(noise);
@@ -132,8 +133,9 @@ WaitTimes = WaitTime+exprnd(0.2,[numStimuli,1]);
 
 usb.startRecording;
 WaitSecs(5);
+tt = 1;
 vbl = Screen('Flip',win);
-for tt=1:numStimuli
+while tt <= numStimuli
     % Convert it to a texture 'tex':
     Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
     Img = kron(double(Img),ones(screenPix_to_effPix));
@@ -143,6 +145,7 @@ for tt=1:numStimuli
     vbl = Screen('Flip',win,vbl-ifi/2+flipIntervals(tt));usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
     Screen('Close',tex);
+    tt = tt+1;
 end
 pause(1);
 usb.stopRecording;
@@ -154,7 +157,8 @@ Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipIntervals','effectivePixels',...
-    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix','WaitTimes');
+    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
+    'conv_factor','WaitTimes','beta','spaceExp');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)

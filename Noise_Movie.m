@@ -49,7 +49,7 @@ downSampleFactor = 1;
 numStimuli = movieTime_Seconds*movie_FrameRate*downSampleFactor;
 
 fprintf('\nEstimated time is %3.2f minutes.',movieTime_Seconds/60);
-WaitSecs(10);
+WaitSecs(5);
 
 % Choose screen with maximum id - the secondary display:
 screenid = max(Screen('Screens'));
@@ -93,6 +93,8 @@ if strcmp(NoiseType,'white') == 1
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
     beta = -1;
+    spaceExp = 2;
+    timeExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
     beta = -6;
 else 
@@ -109,7 +111,7 @@ DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 u = 0:(DIM(1)-1);v = 0:(DIM(2)-1);
 t = 0:(DIM(3)-1);
 [U,V,T] = meshgrid(u,v,t);
-S_f = single((U.^2+V.^2+T.^2).^(beta/2));
+S_f = single((U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2));
 clear U V T u v t;
 S_f(S_f==inf) = 1;
 % S_f = S_f.^0.5;
@@ -144,8 +146,8 @@ while tt <= numStimuli
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex);
     vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
-    tt = tt+1;
     Screen('Close',tex);
+    tt = tt+1;
 end
 WaitSecs(2);
 usb.stopRecording;
@@ -157,7 +159,8 @@ Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','movie_FrameRate','effectivePixels','movieTime_Seconds',...
-    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix');
+    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
+    'conv_factor','beta','spaceExp','timeExp');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
