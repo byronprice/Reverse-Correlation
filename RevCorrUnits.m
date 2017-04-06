@@ -42,7 +42,7 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %    
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/02/03
+% Updated: 2017/04/05
 % By: Byron Price
 
 % CREATE GIANT CONVOLUTION MATRIX TO TAKE DISCRETE
@@ -68,17 +68,25 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %  with the first stimulus (which was a grey screen)
 
 % read in the .plx file
+beta = 0;
 
-EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName));
+EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 
-if exist(strcat(EphysFileName,'.mat'),'file') ~= 2
+if exist(EphysFileName,'file') ~= 2
     readall(strcat(EphysFileName,'.plx'));pause(1);
 end
 
 StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
-EphysFileName = strcat(EphysFileName,'.mat');
 load(EphysFileName)
 load(StimulusFileName)
+
+% generate theoretical stimulus power spectrum
+N = sqrt(effectivePixels);
+u = 0:(N-1);
+[U,V] = meshgrid(u,u);
+S_f = (U.^spaceExp+V.^spaceExp).^(beta/2);
+S_f(S_f==inf) = 1;
+
 
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
@@ -115,41 +123,95 @@ for ii=1:numStimuli
 end
 clear S;
 
-
 strobeData = tsevs{1,strobeStart};
-stimLen = 0.05;stimStart = 0.05;
 
-totalTime = strobeData(end);
-% COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-Response = zeros(numChans,nunits1,numStimuli);
-baseRate = zeros(numChans,nunits1);
+% GLM to check for visual responsiveness
+significantVisualResponsiveness = zeros(size(allts));
+stimStartTimes = zeros(size(allts));
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
-        baseRate(ii,jj) = length(allts{ii,jj+1})./totalTime;
-        display(baseRate(ii,jj));
-%         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
-        for kk=1:numStimuli
-            stimOnset = strobeData(kk);
-            high = find(allts{ii,jj+1} > (stimOnset+stimStart));
-            low = find(allts{ii,jj+1} < (stimOnset+stimStart+stimLen));
-            temp = intersect(low,high);
-            
-            if mod(kk,2) == 1
-                Response(ii,jj,kk) = (length(temp)./stimLen)./baseRate(ii,jj)-1;
-%                 plot((stimOnset+stimStart).*ones(round(Response(ii,jj,kk))+1,1),0:1:round(Response(ii,jj,kk)),'b');
-            elseif mod(kk,2) == 0
-                Response(ii,jj,kk) = -(length(temp)./stimLen)./baseRate(ii,jj)+1;
-%                 plot((stimOnset+stimStart).*ones(-round(Response(ii,jj,kk))+1,1),round(Response(ii,jj,kk)):1:0,'b');
-            end
-            
-            clear temp;
+        totalTime = max(allts{ii,jj+1})+0.5;
+        totalMillisecs = round(totalTime*1000);
+        histDependentCoeffs = 150;
+        timeAfterStimOnsetCoeffs = 150;
+        
+        % create Gaussian basis functions with 2ms standard deviation
+        stdev = 5;
+        numBasis = 25;
+        Shist = zeros(histDependentCoeffs,numBasis);
+        SstimOnset = zeros(timeAfterStimOnsetCoeffs,numBasis);
+        
+        timeHist = 0:(histDependentCoeffs-1);
+        timeStimOnset = 0:(timeAfterStimOnsetCoeffs-1);
+        for kk=1:numBasis
+            Shist(:,kk) = exp(-(timeHist'-(kk-1)*histDependentCoeffs/numBasis).^2./(2*stdev*stdev));
+            SstimOnset(:,kk) = exp(-(timeStimOnset'-(kk-1)*timeAfterStimOnsetCoeffs/numBasis).^2./(2*stdev*stdev));
         end
+
+        Y = zeros(totalMillisecs,1);
+        visualResponseDesign = zeros(totalMillisecs,timeAfterStimOnsetCoeffs);
+        histDependentDesign = zeros(totalMillisecs,histDependentCoeffs);
+        
+        % convert spike times to point process
+        temp = round(allts{ii,jj+1}.*1000);
+        for kk=1:length(temp)
+            Y(temp(kk)) = 1;
+        end
+        
+        % convert timeStamps to point process
+        stimTimes = round(strobeData.*1000);
+        pointProcessStimOnsets = zeros(totalMillisecs,1);
+        for kk=1:numStimuli
+            pointProcessStimOnsets(stimTimes(kk)) = 1;
+        end
+        
+        % get history dependence (past 20ms)
+        for kk=1:histDependentCoeffs
+            temp = Y;shift = zeros(kk,1);
+            history = [shift;temp];
+            histDependentDesign(:,kk) = history(1:(end-kk));
+        end
+        
+        % collect time period from 1 to 150 ms
+        for kk=1:timeAfterStimOnsetCoeffs
+            temp = pointProcessStimOnsets;shift = zeros(kk,1);
+            history = [shift;temp];
+            visualResponseDesign(:,kk) = history(1:(end-(kk)));
+        end
+        
+        Design = histDependentDesign*Shist;
+        [b1,dev1,stats1] = glmfit(Design,Y,'poisson');
+        AIC1 = dev1+2*length(b1);
+        
+        Design = [histDependentDesign*Shist,visualResponseDesign*SstimOnset];
+        [b2,dev2,stats2] = glmfit(Design,Y,'poisson');
+        AIC2 = dev2+2*length(b2);
+        
+        if AIC2 < AIC1
+            significantVisualResponsiveness(ii,jj+1) = 1;
+            fprintf('Chan %d, Neuron %d Visually Responsive\n',ii,jj);
+        else
+            fprintf('Chan %d, Neuron %d NOT Visually Responsive\n',ii,jj); 
+        end
+        
+        fullS = [[Shist;zeros(size(SstimOnset))],[zeros(size(Shist));SstimOnset]];
+        
+        [yhat,dylo,dyhi] = glmval(b2,fullS,'log',stats2);
+        
+        [~,index] = max(yhat(histDependentCoeffs+1:end));
+        stimStartTimes(ii,jj+1) = index-30;
+
+        figure();boundedline(1:size(fullS,1),yhat,[dylo,dyhi]);
+        set(gca,'XTick',linspace(0,histDependentCoeffs+timeAfterStimOnsetCoeffs,20));
+        set(gca,'XTickLabels',[round(linspace(0,histDependentCoeffs,10)),round(linspace(0,timeAfterStimOnsetCoeffs,10))]);
+        xlabel('Lag (ms), then Time After Stim Onset (ms)');
+        ylabel('Intensity');
+        title(sprintf('Chan %d, Neuron %d- %d',ii,jj,AIC2<AIC1));
     end
 end
 
 % CREATE LAPLACIAN MATRIX
-N = sqrt(effectivePixels);
 L = zeros(effectivePixels,effectivePixels,'single');
 for ii=1:effectivePixels
     if ii == 1  % top left corner
@@ -194,23 +256,66 @@ for ii=1:effectivePixels
         L(ii,ii+1) = -1;
         L(ii,ii-N) = -1;
         L(ii,ii+N) = -1;
-    end   
+    end
+end
+
+% could simplify by ignoring edge conditions and doing ...
+%   diagFours = 4.*diag(effectivePixels);
+%   diagUpOnes = -1.*diag(effectivePixels,1);
+%   diagDownOnes = -1.*diag(effectivePixels,-1);
+%   L = diagFours+diagUpOnes+diagDownOnes;
+
+
+stimLen = 0.06;bigLambda = [5e3,1e4,2.5e4,5e4];
+
+F = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
+
+totalTime = strobeData(end)+1;
+% COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
+Response = zeros(numChans,nunits1,numStimuli);
+baseRate = zeros(numChans,nunits1);
+for ii=1:numChans
+    numNeurons = Neurons(ii,1);
+    for jj=1:numNeurons
+        stimStart = stimStartTimes(ii,jj+1);
+        baseRate(ii,jj) = length(allts{ii,jj+1})./totalTime;
+        %             display(baseRate(ii,jj));
+        %         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
+        for kk=1:numStimuli
+            stimOnset = strobeData(kk);
+            high = find(allts{ii,jj+1} > (stimOnset+stimStart));
+            low = find(allts{ii,jj+1} < (stimOnset+stimStart+stimLen));
+            temp = intersect(low,high);
+            
+            if mod(kk,2) == 1
+                Response(ii,jj,kk) = (length(temp)./stimLen)./baseRate(ii,jj)-1;
+                %                 plot((stimOnset+stimStart).*ones(round(Response(ii,jj,kk))+1,1),0:1:round(Response(ii,jj,kk)),'b');
+            elseif mod(kk,2) == 0
+                Response(ii,jj,kk) = -(length(temp)./stimLen)./baseRate(ii,jj)+1;
+                %                 plot((stimOnset+stimStart).*ones(-round(Response(ii,jj,kk))+1,1),round(Response(ii,jj,kk)):1:0,'b');
+            end
+            
+            clear temp;
+        end
+    end
 end
 
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
 degreesVisualSpace = degPerPix*screenPix_to_effPix*N;
 xaxis = linspace(-degreesVisualSpace/2,degreesVisualSpace/2,N);
-yaxis = linspace(-degreesVisualSpace/3,2*degreesVisualSpace/3,N);
-for lambda = [5e3,1e4,2.5e4,5e4]
+yaxis = linspace(-degreesVisualSpace/4,3*degreesVisualSpace/4,N);
+maxNeurons = max(Neurons);
+
+for lambda = 1:length(bigLambda)
     % VERTICALLY CONCATENATE S and L
     % S is size numStimuli X effectivePixels
-    A = [newS;lambda.*L];
-    F = zeros(numChans,nunits1,effectivePixels);
+    A = [newS;bigLambda(lambda).*L];
+    figure();plotCount = 1;
     for ii=1:numChans
         numNeurons = Neurons(ii,1);
         for jj=1:numNeurons
-            figure();
+            
             r = squeeze(Response(ii,jj,:));
             constraints = [r;zeros(effectivePixels,1)];
             % %         r = newS*f ... constraints = A*f
@@ -221,18 +326,30 @@ for lambda = [5e3,1e4,2.5e4,5e4]
             %         fhat = pinv(newS)*r;
             % alternatively
             %         fhat = newS\r;
+            
             fhat = A\constraints;
             %         fhat = newS(1:2:end,:)'*r(1:2:end)/sum(r(1:2:end));
             %         fhat = newS'*r./sum(r);
-            F(ii,jj,:) = fhat;
-            imagesc(xaxis,yaxis,reshape(fhat,[N,N]));set(gca,'YDir','normal');
-            title(sprintf('Lambda %3.1e, Base Firing %3.1f',lambda,baseRate(ii,jj)));
-            xlabel('Horizontal Eccentricity (degrees of visual space)');
-            ylabel('Vertical Eccentricity (degrees of visual space)');
-            %         subplot(plotRows,2,jj);histogram(r);
+            
+            tempfhat = reshape(fhat,[N,N]);
+            tempFFT = fft2(tempfhat);
+            tempFFT = numStimuli.*tempFFT./S_f;
+            tempIFFT = ifft2(tempFFT);%tempIFFT = sqrt(tempIFFT.*conj(tempIFFT));
+            F(lambda,ii,jj,:) = tempIFFT(:);
+            
+            subplot(numChans,maxNeurons,plotCount);
+            imagesc(xaxis,yaxis,tempIFFT);set(gca,'YDir','normal');
+            title(sprintf('Lambda %3.1e',bigLambda(lambda)));
+            xlabel('Azimuth (degrees of visual arc)');
+            ylabel('Altitude(degrees of visual arc)');
+            plotCount = plotCount+1;
         end
     end
 end
+
+FileName = strcat('NoiseResults',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
+save(FileName,'F','newS','bigStimStart','bigLambda','numChans','nunits1',...
+    'Neurons','beta','spaceExp','N','significantVisualResponsiveness');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
