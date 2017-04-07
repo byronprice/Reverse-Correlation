@@ -136,7 +136,7 @@ stimStartTimes = zeros(size(allts));
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
-        totalTime = max(allts{ii,jj+1})+0.5;
+        totalTime = strobeData(end)+2;
         totalMillisecs = round(totalTime*1000);
         histDependentCoeffs = 150;
         timeAfterStimOnsetCoeffs = 150;
@@ -182,7 +182,7 @@ for ii=1:numChans
         for kk=1:timeAfterStimOnsetCoeffs
             temp = pointProcessStimOnsets;shift = zeros(kk,1);
             history = [shift;temp];
-            visualResponseDesign(:,kk) = history(1:(end-(kk)));
+            visualResponseDesign(:,kk) = history(1:(end-kk));
         end
         
         Design = histDependentDesign*Shist;
@@ -205,7 +205,7 @@ for ii=1:numChans
         [yhat,dylo,dyhi] = glmval(b2,fullS,'log',stats2);
         
         [~,index] = max(abs(yhat(histDependentCoeffs+1:end)-...
-            mean(yhat(round(histDependentCoeffs/2):histDependentCoeffs))));
+            mean(yhat(histDependentCoeffs:histDependentCoeffs+45))));
         stimStartTimes(ii,jj+1) = index-30;
 
         figure();boundedline(1:size(fullS,1),yhat,[dylo,dyhi]);
@@ -276,7 +276,7 @@ end
 
 stimLen = 0.06;
 
-totalTime = strobeData(end)+1;
+totalTime = strobeData(end)+2;
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
 Response = zeros(numChans,nunits1,numStimuli);
 baseRate = zeros(numChans,nunits1);
@@ -309,7 +309,7 @@ maxNeurons = max(Neurons);
 
 bigLambda = [5e1,1e2,5e2,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6];
 F = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
-RMS = zeros(length(bigLamda),numChans,nunits1);
+RMS = zeros(length(bigLambda),numChans,nunits1);
 for lambda = 1:length(bigLambda)
     % VERTICALLY CONCATENATE S and L
     % S is size numStimuli X effectivePixels
@@ -349,15 +349,15 @@ for lambda = 1:length(bigLambda)
     end
 end
 
-for ii=1:numChans
-    numNeurons = Neurons(ii,1);
-    for jj=1:numNeurons
-        
-    end
-end
+% for ii=1:numChans
+%     numNeurons = Neurons(ii,1);
+%     for jj=1:numNeurons
+%         
+%     end
+% end
 
 FileName = strcat('NoiseResults',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
-save(FileName,'F','newS','Response','allts','bigStimStart','bigLambda','numChans','nunits1',...
+save(FileName,'F','newS','Response','allts','bigLambda','numChans','nunits1',...
     'Neurons','beta','spaceExp','N','significantVisualResponsiveness','RMS',...
     'stimStartTimes');
 
