@@ -73,7 +73,7 @@ beta = 0;
 EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 
 if exist(EphysFileName,'file') ~= 2
-    readall(strcat(EphysFileName,'.plx'));pause(1);
+    readall(strcat(EphysFileName(1:end-4),'.plx'));pause(1);
 end
 
 StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
@@ -112,13 +112,14 @@ Neurons = sum(fullSpots,2);
 
 % ASSUME THAT A RESPONSE TO A STIMULUS OFFSET IS THE SAME AS A RESPONSE TO
 %  THE NEGATIVE OF THAT IMAGE, image created with values from 0 to 255
+Grey = 127;
 numStimuli = numStimuli*2;
 newS = zeros(numStimuli,size(S,2),'single');
 for ii=1:numStimuli
     if mod(ii,2) == 1
         newS(ii,:) = S(floor(ii/2)+1,:);
     elseif mod(ii,2) == 0
-        newS(ii,:) = 255-S(ii/2,:); %S(ii/2,:)
+        newS(ii,:) = 255-S(ii/2,:); %255-S(ii/2,:)
 %         temp = reshape(S(ii/2,:),[N,N]);
 %         temp2 = reshape(255-S(ii/2,:),[N,N]);
 %         figure();imagesc(temp);
@@ -126,6 +127,7 @@ for ii=1:numStimuli
 %         display('blah');
     end
 end
+newS = newS-Grey;
 clear S;
 
 strobeData = tsevs{1,strobeStart};
@@ -206,16 +208,18 @@ for ii=1:numChans
         
         [~,index] = max(abs(yhat(histDependentCoeffs+1:end)-...
             mean(yhat(histDependentCoeffs:histDependentCoeffs+45))));
+
         stimStartTimes(ii,jj+1) = index-30;
 
-        figure();boundedline(1:size(fullS,1),yhat,[dylo,dyhi]);
-        set(gca,'XTick',[linspace(0,histDependentCoeffs,10),...
-            linspace(histDependentCoeffs+1,histDependentCoeffs+timeAfterStimOnsetCoeffs,10)]);
-        set(gca,'XTickLabels',[round(linspace(0,histDependentCoeffs,10)),...
-        round(linspace(0,timeAfterStimOnsetCoeffs,10))]);
-        xlabel('Lag (ms), then Time After Stim Onset (ms)');
-        ylabel('Intensity');
-        title(sprintf('Chan %d, Neuron %d- %d',ii,jj,AIC2<AIC1));
+
+%         figure();boundedline(1:size(fullS,1),yhat,[dylo,dyhi]);
+%         set(gca,'XTick',[linspace(0,histDependentCoeffs,10),...
+%             linspace(histDependentCoeffs+1,histDependentCoeffs+timeAfterStimOnsetCoeffs,10)]);
+%         set(gca,'XTickLabels',[round(linspace(0,histDependentCoeffs,10)),...
+%         round(linspace(0,timeAfterStimOnsetCoeffs,10))]);
+%         xlabel('Lag (ms), then Time After Stim Onset (ms)');
+%         ylabel('Intensity');
+%         title(sprintf('Chan %d, Neuron %d- %d',ii,jj,AIC2<AIC1));
     end
 end
 
@@ -294,6 +298,11 @@ for ii=1:numChans
             temp = intersect(low,high);
             
             Response(ii,jj+1,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1);
+%             if mod(kk,2) == 1
+%                 Response(ii,jj+1,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1)-1;
+%             elseif mod(kk,2) == 0
+%                 Response(ii,jj+1,kk) = -(length(temp)./stimLen)./baseRate(ii,jj+1)+1; 
+%             end
             
             clear temp;
         end
@@ -307,8 +316,9 @@ xaxis = linspace(-degreesVisualSpace/2,degreesVisualSpace/2,N);
 yaxis = linspace(-degreesVisualSpace/4,3*degreesVisualSpace/4,N);
 maxNeurons = max(Neurons);
 
-bigLambda = [5e1,1e2,5e2,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6];
+bigLambda = [0,5e1,1e2,5e2,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6,1e7,5e7,1e8];
 F = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
+uncorrectedF = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
 RMS = zeros(length(bigLambda),numChans,nunits1);
 for lambda = 1:length(bigLambda)
     % VERTICALLY CONCATENATE S and L
@@ -335,6 +345,7 @@ for lambda = 1:length(bigLambda)
             
             tempfhat = reshape(fhat,[N,N]);
             tempFFT = fft2(tempfhat);
+            uncorrectedF(lambda,ii,jj+1,:) = fhat;
             tempFFT = numStimuli.*tempFFT./S_f;
             tempIFFT = ifft2(tempFFT);%tempIFFT = sqrt(tempIFFT.*conj(tempIFFT));
             F(lambda,ii,jj+1,:) = tempIFFT(:);
@@ -349,17 +360,31 @@ for lambda = 1:length(bigLambda)
     end
 end
 
-% for ii=1:numChans
-%     numNeurons = Neurons(ii,1);
-%     for jj=1:numNeurons
-%         
-%     end
-% end
+figure();
+bestMaps = zeros(numChans,nunits1);
+plotCount = 1;
+for ii=1:numChans
+    numNeurons = Neurons(ii,1);
+    for jj=1:numNeurons
+        tempRMS = squeeze(RMS(:,ii,jj+1));
+        rmsDiff = diff(tempRMS);lambdaDiff = diff(bigLambda)';
+        deltaRMSdeltaLambda = rmsDiff./lambdaDiff;
+        [maxVal,index] = max(abs(deltaRMSdeltaLambda));
+        onepercent = 0.01*maxVal;
+        firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
+        bestMaps(ii,jj+1) = index+firstBelow;
+        subplot(numChans,maxNeurons,plotCount);
+        imagesc(xaxis,yaxis,reshape(F(index+firstBelow,ii,jj+1,:),[N,N]));
+        title(sprintf('Chan %d, Neuron %d',ii,jj));
+        xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
+        plotCount = plotCount+1;
+    end
+end
 
 FileName = strcat('NoiseResults',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 save(FileName,'F','newS','Response','allts','bigLambda','numChans','nunits1',...
     'Neurons','beta','spaceExp','N','significantVisualResponsiveness','RMS',...
-    'stimStartTimes');
+    'stimStartTimes','bestMaps','uncorrectedF');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans

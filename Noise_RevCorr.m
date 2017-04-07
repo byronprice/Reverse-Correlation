@@ -57,7 +57,7 @@ usb = usb1208FSPlusClass;
 AssertOpenGL;
 
 TimeEstimate = numStimuli*(flipInterval+0.1+WaitTime+0.2)/60;
-display(sprintf('\nEstimated time is %3.2f minutes.',TimeEstimate))
+fprintf('\nEstimated time is %3.2f minutes.',TimeEstimate);
 WaitSecs(5);
 
 % Choose screen with maximum id - the secondary display:
@@ -81,11 +81,13 @@ conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
-screenPix_to_effPix = 25;
+screenPix_to_effPix = 30;
+maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
 minPix = minPix-mod(minPix,screenPix_to_effPix);
-numPixels = minPix*minPix;
 
-effectivePixels = numPixels/(screenPix_to_effPix*screenPix_to_effPix);
+effectivePixels = [maxPix/screenPix_to_effPix,minPix/screenPix_to_effPix];
+
+degPerPix = atand((screenPix_to_effPix*conv_factor)/(DistToScreen*10));
 
 % GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
@@ -103,15 +105,13 @@ else
 end
 
 Grey = 127;
-S = zeros(numStimuli,effectivePixels,'uint8');
-N = sqrt(effectivePixels);
-% perform unit conversions
-degPerPix = atand((1*conv_factor)/(DistToScreen*10));
+DIM = [effectivePixels(1),effectivePixels(2)];
+S = zeros(numStimuli,DIM(1)*DIM(2),'uint8');
 % below pink noise from Jon Yearsley, 1/f noise generate spatial data
-DIM = [N,N];
+
 for ii=1:numStimuli
-    u = 0:(N-1);
-    [U,V] = meshgrid(u,u);
+    u = 0:(DIM(1)-1);v = 0:(DIM(2)-1);
+    [U,V] = meshgrid(u,v);
     S_f = (U.^spaceExp+V.^spaceExp).^(beta/2);
     S_f(S_f==inf) = 1;
     noise = wgn(DIM(1),DIM(2),0);
@@ -121,7 +121,7 @@ for ii=1:numStimuli
     X = sqrt(X.*conj(X)); % real(X)
     X = X-min(min(X));
     X = (X./max(max(X))).*255;
-    y = reshape(X,[1,effectivePixels]);
+    y = X(:);
     meanVal = mean(y);difference = meanVal-Grey;
     S(ii,:) = y-difference;
 end
@@ -139,7 +139,7 @@ tt = 1;
 vbl = Screen('Flip',win);
 while tt <= numStimuli
     % Convert it to a texture 'tex':
-    Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
+    Img = reshape(S(tt,:),[DIM(1),DIM(2)]);
     Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex);
