@@ -145,7 +145,8 @@ while tt <= numStimuli
     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
+    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);
+    usb.strobe;
     Screen('Close',tex);
     tt = tt+1;
 end

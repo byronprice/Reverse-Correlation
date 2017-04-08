@@ -74,6 +74,7 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 % Query window size in pixels
 [w_pixels,h_pixels] = Screen('WindowSize', win);
 minPix = min(w_pixels,h_pixels);
+maxPix = max(w_pixels,h_pixels)-250;
 
 % screen size in millimeters and a conversion factor to get from mm to pixels
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
@@ -114,7 +115,7 @@ for ii=1:numStimuli
     [U,V] = meshgrid(u,v);
     S_f = (U.^spaceExp+V.^spaceExp).^(beta/2);
     S_f(S_f==inf) = 1;
-    noise = wgn(DIM(1),DIM(2),0);
+    noise = randn([DIM(2),DIM(1)],'single');
     Y = fft2(noise);
     Y = Y.*S_f;
     X = ifft2(Y);
@@ -130,7 +131,7 @@ S = uint8(S);
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
-flipIntervals = flipInterval+exprnd(0.1,[numStimuli,1]);
+%flipIntervals = flipInterval;%+exprnd(0.1,[numStimuli,1]);
 WaitTimes = WaitTime+exprnd(0.2,[numStimuli,1]);
 
 usb.startRecording;
@@ -139,12 +140,12 @@ tt = 1;
 vbl = Screen('Flip',win);
 while tt <= numStimuli
     % Convert it to a texture 'tex':
-    Img = reshape(S(tt,:),[DIM(1),DIM(2)]);
+    Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
     Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex);
     vbl = Screen('Flip',win);usb.strobe;
-    vbl = Screen('Flip',win,vbl-ifi/2+flipIntervals(tt));usb.strobe;
+    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
     Screen('Close',tex);
     tt = tt+1;
@@ -158,7 +159,7 @@ Priority(0);
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
-save(filename,'S','numStimuli','flipIntervals','effectivePixels',...
+save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
     'conv_factor','WaitTimes','beta','spaceExp');
 end
