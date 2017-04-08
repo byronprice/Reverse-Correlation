@@ -127,7 +127,7 @@ for ii=1:numStimuli
 %         display('blah');
     end
 end
-newS = newS-Grey;
+%newS = Grey-newS;
 clear S;
 
 strobeData = tsevs{1,strobeStart};
@@ -225,57 +225,28 @@ end
 
 % CREATE LAPLACIAN MATRIX
 L = zeros(effectivePixels,effectivePixels,'single');
-for ii=1:effectivePixels
-    if ii == 1  % top left corner
-        L(ii,1) = 2;
-        L(ii,2) = -1;
-        L(ii,N+1) = -1;
-    elseif ii == N % bottom left corner
-        L(ii,N) = 2;
-        L(ii,N-1) = -1;
-        L(ii,2*N) = -1;
-    elseif ii == ((N-1)*N+1) % top right corner
-        L(ii,(N-1)*N+1) = 2;
-        L(ii,(N-2)*N+1) = -1;
-        L(ii,(N-1)*N+2) = -1;
-    elseif ii == N*N % bottom right corner
-        L(ii,N*N) = 2;
-        L(ii,N*N-1) = -1;
-        L(ii,(N-1)*N) = -1;
-    elseif ismember(ii,2:1:N-1) % left edge
-        L(ii,ii) = 3;
-        L(ii,ii-1) = -1;
-        L(ii,ii+1) = -1;
-        L(ii,ii+N) = -1;
-    elseif ismember(ii,2*N:N:(N-1)*N) % bottom edge
-        L(ii,ii) = 3;
-        L(ii,ii-1) = -1;
-        L(ii,ii-N) = -1;
-        L(ii,ii+N) = -1;
-    elseif ismember(ii,(N-1)*N+2:1:N*N-1) % right edge
-        L(ii,ii) = 3;
-        L(ii,ii-1) = -1;
-        L(ii,ii+1) = -1;
-        L(ii,ii-N) = -1;
-    elseif ismember(ii,(N+1):N:(N-2)*N+1) % top edge
-        L(ii,ii) = 3;
-        L(ii,ii+1) = -1;
-        L(ii,ii-N) = -1;
-        L(ii,ii+N) = -1;
-    else        % interior points
-        L(ii,ii) = 4;
-        L(ii,ii-1) = -1;
-        L(ii,ii+1) = -1;
-        L(ii,ii-N) = -1;
-        L(ii,ii+N) = -1;
+
+operator = [0,-1,0;-1,4,-1;0,-1,0];
+bigCount = 1;
+for ii=1:N
+    for jj=1:N
+        tempMat = zeros(N,N);
+        tempMat(ii,jj) = 4;
+        if ii > 1
+            tempMat(ii-1,jj) = -1;
+        end
+        if ii < N
+            tempMat(ii+1,jj) = -1;
+        end
+        if jj > 1
+            tempMat(ii,jj-1) = -1;
+        end
+        if jj < N
+            tempMat(ii,jj+1) = -1;
+        end
+        L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
     end
 end
-
-% could simplify by ignoring edge conditions and doing ...
-%   diagFours = 4.*diag(effectivePixels);
-%   diagUpOnes = -1.*diag(effectivePixels,1);
-%   diagDownOnes = -1.*diag(effectivePixels,-1);
-%   L = diagFours+diagUpOnes+diagDownOnes;
 
 
 stimLen = 0.06;
@@ -304,7 +275,6 @@ for ii=1:numChans
 %                 Response(ii,jj+1,kk) = -(length(temp)./stimLen)./baseRate(ii,jj+1)+1; 
 %             end
             
-            clear temp;
         end
     end
 end
@@ -330,7 +300,6 @@ for lambda = 1:length(bigLambda)
             
             r = squeeze(Response(ii,jj+1,:));
             constraints = [r;zeros(effectivePixels,1)];
-            % %         r = newS*f ... constraints = A*f
             %         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
             %         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
             
@@ -339,9 +308,8 @@ for lambda = 1:length(bigLambda)
             % alternatively
             %         fhat = newS\r;
             
-            fhat = A\constraints;
-            %         fhat = newS(1:2:end,:)'*r(1:2:end)/sum(r(1:2:end));
-            %         fhat = newS'*r./sum(r);
+%             fhat = A\constraints;
+            fhat = pinv(A)*constraints;
             
             tempfhat = reshape(fhat,[N,N]);
             tempFFT = fft2(tempfhat);
@@ -349,7 +317,7 @@ for lambda = 1:length(bigLambda)
             tempFFT = numStimuli.*tempFFT./S_f;
             tempIFFT = ifft2(tempFFT);%tempIFFT = sqrt(tempIFFT.*conj(tempIFFT));
             F(lambda,ii,jj+1,:) = tempIFFT(:);
-            RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS*tempIFFT(:),2);
+            RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS*tempIFFT(:));
 %             subplot(numChans,maxNeurons,plotCount);
 %             imagesc(xaxis,yaxis,tempIFFT);set(gca,'YDir','normal');
 %             title(sprintf('Lambda %3.1e',bigLambda(lambda)));
@@ -360,7 +328,7 @@ for lambda = 1:length(bigLambda)
     end
 end
 
-figure();
+figure(1);figure(2);figure(3);
 bestMaps = zeros(numChans,nunits1);
 plotCount = 1;
 for ii=1:numChans
@@ -373,11 +341,24 @@ for ii=1:numChans
         onepercent = 0.01*maxVal;
         firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
         bestMaps(ii,jj+1) = index+firstBelow;
+        
+        figure(1);
         subplot(numChans,maxNeurons,plotCount);
         imagesc(xaxis,yaxis,reshape(F(index+firstBelow,ii,jj+1,:),[N,N]));
-        title(sprintf('Chan %d, Neuron %d',ii,jj));
+        title(sprintf('Unbiased Chan %d, Neuron %d',ii,jj));
+        xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
+        
+        figure(2);
+        subplot(numChans,maxNeurons,plotCount);
+        imagesc(xaxis,yaxis,reshape(uncorrectedF(index+firstBelow,ii,jj+1,:),[N,N]));
+        title(sprintf('Biased Chan %d, Neuron %d',ii,jj));
         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
         plotCount = plotCount+1;
+        
+        figure(3);
+        subplot(numChans,maxNeurons,plotCount)
+        plot(log10(bigLambda),squeeze(RMS(:,ii,jj+1)));
+        
     end
 end
 
