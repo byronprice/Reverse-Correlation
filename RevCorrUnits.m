@@ -353,12 +353,13 @@ for ii=1:numChans
         imagesc(xaxis,yaxis,reshape(uncorrectedF(index+firstBelow,ii,jj+1,:),[N,N]));
         title(sprintf('Biased Chan %d, Neuron %d',ii,jj));
         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
-        plotCount = plotCount+1;
+        
         
         figure(3);
         subplot(numChans,maxNeurons,plotCount)
         plot(log10(bigLambda),squeeze(RMS(:,ii,jj+1)));
         
+        plotCount = plotCount+1;
     end
 end
 
