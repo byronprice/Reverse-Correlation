@@ -127,7 +127,7 @@ for ii=1:numStimuli
 %         display('blah');
     end
 end
-newS = newS-Grey;
+%newS = newS-Grey;
 clear S;
 
 strobeData = tsevs{1,strobeStart};
@@ -397,8 +397,59 @@ save(FileName,'F','newS','Response','allts','bigLambda','numChans','nunits1',...
 
 end
 
-
-
-
-
-
+% SIMULATE DATA and test algorithm
+% numStimuli = 5000;
+% N = 48;
+% newS = randn([numStimuli,N*N]);
+% gaborFilter = @(x,y) exp(-x.^2./(2*3*3)-y.^2./(2*3*3)).*sin(2*pi*0.05.*(x.*cos(pi/4)+y.*sin(pi/4)));
+% gaussFilter = @(x,y) exp(-x.^2./(2*3*3)-y.^2./(2*3*3));
+% x = linspace(-20,20,N);y = linspace(-20,20,N);
+% [X,Y] = meshgrid(x,y);
+% gabor = gaborFilter(X,Y);
+% gauss = gaussFilter(X,Y);
+% r = zeros(numStimuli,1);
+% for ii=1:numStimuli
+%     temp = newS(ii,:);
+%     temp = temp-min(temp);temp = (temp./max(temp)).*255;
+%     temp = temp-(mean(temp)-127);
+%     newS(ii,:) = temp;
+%     %gaussOutput = newS(ii,:)'.*gauss(:);
+%     gaborOutput = newS(ii,:)'.*gabor(:);
+%     lambda = exp((sum(gaborOutput))/(N*N));
+%     r(ii) = poissrnd(lambda);
+% end
+% 
+% L = zeros(N*N,N*N,'single');
+% 
+% %operator = [0,-1,0;-1,4,-1;0,-1,0];
+% bigCount = 1;
+% for jj=1:N
+%     for ii=1:N
+%         tempMat = zeros(N,N);
+%         tempMat(ii,jj) = 4;
+%         if ii > 1
+%             tempMat(ii-1,jj) = -1;
+%         end
+%         if ii < N
+%             tempMat(ii+1,jj) = -1;
+%         end
+%         if jj > 1
+%             tempMat(ii,jj-1) = -1;
+%         end
+%         if jj < N
+%             tempMat(ii,jj+1) = -1;
+%         end
+%         L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+%     end
+% end
+% bigLambda = [0,5e1,1e2,1e3,1e4,5e4,1e5,1e6,1e7,1e8];
+% RMS = zeros(length(bigLambda),1);
+% for ii=1:length(bigLambda)
+%     A = [newS;bigLambda(ii).*L];
+%     constraints = [r;zeros(N*N,1)];
+%     fhat = pinv(A)*constraints;
+%     figure();subplot(2,1,1);imagesc(gabor);subplot(2,1,2);imagesc(reshape(fhat,[N,N]));
+%     RMS(ii) = (N*N)^(-0.5)*norm(r-newS*fhat);
+% end
+% 
+% figure();plot(RMS);
