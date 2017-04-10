@@ -127,91 +127,102 @@ for ii=1:numStimuli
 %         display('blah');
     end
 end
-%newS = Grey-newS;
+newS = newS-Grey;
 clear S;
 
 strobeData = tsevs{1,strobeStart};
 
 % GLM to check for visual responsiveness
-significantVisualResponsiveness = zeros(size(allts));
-stimStartTimes = zeros(size(allts));
-for ii=1:numChans
-    numNeurons = Neurons(ii,1);
-    for jj=1:numNeurons
-        totalTime = strobeData(end)+2;
-        totalMillisecs = round(totalTime*1000);
-        histDependentCoeffs = 150;
-        timeAfterStimOnsetCoeffs = 150;
-        
-        % create Gaussian basis functions with 2ms standard deviation
-        stdev = 5;
-        numBasis = 25;
-        Shist = zeros(histDependentCoeffs,numBasis);
-        SstimOnset = zeros(timeAfterStimOnsetCoeffs,numBasis);
-        
-        timeHist = 0:(histDependentCoeffs-1);
-        timeStimOnset = 0:(timeAfterStimOnsetCoeffs-1);
-        for kk=1:numBasis
-            Shist(:,kk) = exp(-(timeHist'-(kk-1)*histDependentCoeffs/numBasis).^2./(2*stdev*stdev));
-            SstimOnset(:,kk) = exp(-(timeStimOnset'-(kk-1)*timeAfterStimOnsetCoeffs/numBasis).^2./(2*stdev*stdev));
-        end
-
-        Y = zeros(totalMillisecs,1);
-        visualResponseDesign = zeros(totalMillisecs,timeAfterStimOnsetCoeffs);
-        histDependentDesign = zeros(totalMillisecs,histDependentCoeffs);
-        
-        % convert spike times to point process
-        temp = round(allts{ii,jj+1}.*1000);
-        for kk=1:length(temp)
-            Y(temp(kk)) = 1;
-        end
-        
-        % convert timeStamps to point process
-        stimTimes = round(strobeData.*1000);
-        pointProcessStimOnsets = zeros(totalMillisecs,1);
-        for kk=1:numStimuli
-            pointProcessStimOnsets(stimTimes(kk)) = 1;
-        end
-        
-        % get history dependence (past 20ms)
-        for kk=1:histDependentCoeffs
-            temp = Y;shift = zeros(kk,1);
-            history = [shift;temp];
-            histDependentDesign(:,kk) = history(1:(end-kk));
-        end
-        
-        % collect time period from 1 to 150 ms
-        for kk=1:timeAfterStimOnsetCoeffs
-            temp = pointProcessStimOnsets;shift = zeros(kk,1);
-            history = [shift;temp];
-            visualResponseDesign(:,kk) = history(1:(end-kk));
-        end
-        
-        Design = histDependentDesign*Shist;
-        [b1,dev1,stats1] = glmfit(Design,Y,'poisson');
-        AIC1 = dev1+2*length(b1);
-        
-        Design = [histDependentDesign*Shist,visualResponseDesign*SstimOnset];
-        [b2,dev2,stats2] = glmfit(Design,Y,'poisson');
-        AIC2 = dev2+2*length(b2);
-        
-        if AIC2 < AIC1
-            significantVisualResponsiveness(ii,jj+1) = 1;
-            fprintf('Chan %d, Neuron %d Visually Responsive\n',ii,jj);
-        else
-            fprintf('Chan %d, Neuron %d NOT Visually Responsive\n',ii,jj); 
-        end
-        
-        fullS = [[Shist;zeros(size(SstimOnset))],[zeros(size(Shist));SstimOnset]];
-        
-        [yhat,dylo,dyhi] = glmval(b2,fullS,'log',stats2);
-        
-        [~,index] = max(abs(yhat(histDependentCoeffs+1:end)-...
-            mean(yhat(histDependentCoeffs:histDependentCoeffs+45))));
-
-        stimStartTimes(ii,jj+1) = index-30;
-
-
+% significantVisualResponsiveness = zeros(size(allts));
+% stimStartTimes = zeros(size(allts));
+% for ii=1:numChans
+%     numNeurons = Neurons(ii,1);
+%     for jj=1:numNeurons
+%         totalTime = strobeData(end)+2;
+%         totalMillisecs = round(totalTime*1000);
+%         histDependentCoeffs = 60;
+%         timeAfterStimOnsetCoeffs = 60;
+%         
+%         create Gaussian basis functions with 2ms standard deviation
+%         stdev = 5;
+%         numBasis = 20;
+%         Shist = zeros(histDependentCoeffs,numBasis);
+%         SstimOnset = zeros(timeAfterStimOnsetCoeffs,numBasis);
+%         
+%         timeHist = 0:(histDependentCoeffs-1);
+%         timeStimOnset = 0:(timeAfterStimOnsetCoeffs-1);
+%         for kk=1:numBasis
+%             Shist(:,kk) = exp(-(timeHist'-(kk-1)*histDependentCoeffs/numBasis).^2./(2*stdev*stdev));
+%             SstimOnset(:,kk) = exp(-(timeStimOnset'-(kk-1)*timeAfterStimOnsetCoeffs/numBasis).^2./(2*stdev*stdev));
+%         end
+% 
+%         Y = zeros(totalMillisecs,1);
+%         onsetDesign = zeros(totalMillisecs,timeAfterStimOnsetCoeffs);
+%         offsetDesign = zeros(totalMillisecs,timeAfterStimOnsetCoeffs);
+%         histDependentDesign = zeros(totalMillisecs,histDependentCoeffs);
+%         
+%         convert spike times to point process
+%         temp = round(allts{ii,jj+1}.*1000);
+%         for kk=1:length(temp)
+%             Y(temp(kk)) = 1;
+%         end
+%         
+%         convert timeStamps to point process
+%         stimTimes = round(strobeData.*1000);
+%         pointProcessStimOnsets = zeros(totalMillisecs,1);
+%         pointProcessStimOffsets = zeros(totalMillisecs,1);
+%         for kk=1:numStimuli
+%             if mod(kk,2) == 1
+%                 pointProcessStimOnsets(stimTimes(kk)+50) = 1;
+%             elseif mod(kk,2) == 0
+%                 pointProcessStimOffsets(stimTimes(kk)+50) = 1;
+%             end
+%         end
+%         
+%         get history dependence (past 20ms)
+%         for kk=1:histDependentCoeffs
+%             temp = Y;shift = zeros(kk,1);
+%             history = [shift;temp];
+%             histDependentDesign(:,kk) = history(1:(end-kk));
+%         end
+%         
+%         collect time period from 60 to 120 ms
+%         for kk=1:timeAfterStimOnsetCoeffs
+%             temp = pointProcessStimOnsets;shift = zeros(kk,1);
+%             history = [shift;temp];
+%             onsetDesign(:,kk) = history(1:(end-kk));
+%             
+%             temp = pointProcessStimOffsets;shift = zeros(kk,1);
+%             history = [shift;temp];
+%             offsetDesign(:,kk) = history(1:(end-kk));
+%         end
+%         
+%         Design = histDependentDesign*Shist;
+%         [b1,dev1,stats1] = glmfit(Design,Y,'poisson');
+%         AIC1 = dev1+2*length(b1);
+%         
+%         Design = [histDependentDesign*Shist,onsetDesign*SstimOnset,offsetDesign*SstimOnset];
+%         [b2,dev2,stats2] = glmfit(Design,Y,'poisson');
+%         AIC2 = dev2+2*length(b2);
+%         
+%         if AIC2 < AIC1
+%             significantVisualResponsiveness(ii,jj+1) = 1;
+%             fprintf('Chan %d, Neuron %d Visually Responsive\n',ii,jj);
+%         else
+%             fprintf('Chan %d, Neuron %d NOT Visually Responsive\n',ii,jj); 
+%         end
+%         
+%         fullS = [[Shist;zeros(size(SstimOnset));zeros(size(SstimOnset))],[zeros(size(Shist));...
+%             SstimOnset;zeros(size(SstimOnset))],[zeros(size(Shist));zeros(size(SstimOnset));SstimOnset]];
+%         
+%         [yhat,dylo,dyhi] = glmval(b2,fullS,'log',stats2);
+%         
+%         [~,index] = max(abs(yhat(histDependentCoeffs+1:end)-...
+%             mean(yhat(histDependentCoeffs:histDependentCoeffs+45))));
+% 
+%         stimStartTimes(ii,jj+1) = index-30;
+% 
+% 
 %         figure();boundedline(1:size(fullS,1),yhat,[dylo,dyhi]);
 %         set(gca,'XTick',[linspace(0,histDependentCoeffs,10),...
 %             linspace(histDependentCoeffs+1,histDependentCoeffs+timeAfterStimOnsetCoeffs,10)]);
@@ -220,16 +231,16 @@ for ii=1:numChans
 %         xlabel('Lag (ms), then Time After Stim Onset (ms)');
 %         ylabel('Intensity');
 %         title(sprintf('Chan %d, Neuron %d- %d',ii,jj,AIC2<AIC1));
-    end
-end
+%     end
+% end
 
 % CREATE LAPLACIAN MATRIX
 L = zeros(effectivePixels,effectivePixels,'single');
 
-operator = [0,-1,0;-1,4,-1;0,-1,0];
+%operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
-for ii=1:N
-    for jj=1:N
+for jj=1:N
+    for ii=1:N
         tempMat = zeros(N,N);
         tempMat(ii,jj) = 4;
         if ii > 1
@@ -258,7 +269,7 @@ baseRate = zeros(numChans,nunits1);
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
-        stimStart = stimStartTimes(ii,jj+1);
+        stimStart = 0.6;%stimStartTimes(ii,jj+1);
         baseRate(ii,jj+1) = length(allts{ii,jj+1})./totalTime;
         %             display(baseRate(ii,jj));
         %         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
@@ -268,7 +279,7 @@ for ii=1:numChans
             low = find(allts{ii,jj+1} < (stimOnset+stimStart+stimLen));
             temp = intersect(low,high);
             
-            Response(ii,jj+1,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1);
+            Response(ii,jj+1,kk) = length(temp);
 %             if mod(kk,2) == 1
 %                 Response(ii,jj+1,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1)-1;
 %             elseif mod(kk,2) == 0
@@ -293,7 +304,7 @@ RMS = zeros(length(bigLambda),numChans,nunits1);
 for lambda = 1:length(bigLambda)
     % VERTICALLY CONCATENATE S and L
     % S is size numStimuli X effectivePixels
-    A = [newS;bigLambda(lambda).*L];
+    A = [newS(:,:);bigLambda(lambda).*L];
     for ii=1:numChans
         numNeurons = Neurons(ii,1);
         for jj=1:numNeurons
@@ -311,13 +322,13 @@ for lambda = 1:length(bigLambda)
 %             fhat = A\constraints;
             fhat = pinv(A)*constraints;
             
-            tempfhat = reshape(fhat,[N,N]);
+            tempfhat = reshape(fhat,[N,N]);imagesc(xaxis,yaxis,tempfhat);colorbar;pause(1);
             tempFFT = fft2(tempfhat);
             uncorrectedF(lambda,ii,jj+1,:) = fhat;
             tempFFT = numStimuli.*tempFFT./S_f;
             tempIFFT = ifft2(tempFFT);%tempIFFT = sqrt(tempIFFT.*conj(tempIFFT));
             F(lambda,ii,jj+1,:) = tempIFFT(:);
-            RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS*tempIFFT(:));
+            RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS(:,:)*tempIFFT(:));
 %             subplot(numChans,maxNeurons,plotCount);
 %             imagesc(xaxis,yaxis,tempIFFT);set(gca,'YDir','normal');
 %             title(sprintf('Lambda %3.1e',bigLambda(lambda)));
@@ -344,13 +355,13 @@ for ii=1:numChans
         
         figure(1);
         subplot(numChans,maxNeurons,plotCount);
-        imagesc(xaxis,yaxis,reshape(F(index+firstBelow,ii,jj+1,:),[N,N]));
+        imagesc(xaxis,yaxis,reshape(F(index+firstBelow,ii,jj+1,:),[N,N]));set(gca,'YDir','normal');
         title(sprintf('Unbiased Chan %d, Neuron %d',ii,jj));
         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
         
         figure(2);
         subplot(numChans,maxNeurons,plotCount);
-        imagesc(xaxis,yaxis,reshape(uncorrectedF(index+firstBelow,ii,jj+1,:),[N,N]));
+        imagesc(xaxis,yaxis,reshape(uncorrectedF(index+firstBelow,ii,jj+1,:),[N,N]));set(gca,'YDir','normal');
         title(sprintf('Biased Chan %d, Neuron %d',ii,jj));
         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
         
