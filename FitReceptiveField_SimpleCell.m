@@ -96,7 +96,7 @@ totalMillisecs = round(totalTime*1000);
 stimTimes = round(strobeData.*1000);
 pointProcessStimTimes = zeros(totalMillisecs,1);
 stimOnset = 60;
-stimOffset = 100;
+stimOffset = 120;
 stimulusTime = stimOffset-stimOnset+1;
 for kk=1:numStimuli
     pointProcessStimTimes((stimTimes(kk)+stimOnset):(stimTimes(kk)+stimOffset)) = kk;
@@ -142,7 +142,7 @@ for zz=1:numChans
         
         parameterVec(:,1) = max(Bounds(1:numParameters,1),min(parameterVec(:,1),Bounds(1:numParameters,2)));
         
-        tic % currently requires 0.5 seconds ... need 0.0864 seconds
+        tic % currently requires 0.05 seconds ... 0.0864 seconds
         %  just to get it to run in 1 day
         likelihoodXprev = GetLikelihood(parameterVec(:,1));
         toc
@@ -189,13 +189,15 @@ end
 end
 
 function [loglikelihood] = GetLikelihood(parameterVec)
-global newS pointProcessStimTimes historyParams xmesh ymesh numPixels historyDesign Y stimulusTime;
+global totalMillisecs newS pointProcessStimTimes historyParams xmesh ymesh numPixels ...
+    historyDesign Y numStimuli;
 
+loglikelihood = zeros(totalMillisecs,1);
 baseMu = exp(historyDesign(1,:)*parameterVec(1:historyParams));
-loglikelihoodOne = sum(Y(pointProcessStimTimes==0).*log(baseMu)-baseMu);
+loglikelihood(pointProcessStimTimes==0) = Y(pointProcessStimTimes==0).*log(baseMu)-baseMu;
 
-zz = find(pointProcessStimTimes~=0);
-loglikelihoodTwo = zeros(length(zz),1);
+% zz = find(pointProcessStimTimes~=0);
+% loglikelihoodTwo = zeros(length(zz),1);
 
 gaborFilter = parameterVec(historyParams+1)*exp(-(xmesh-parameterVec(historyParams+2)).^2 ...
         ./(2*parameterVec(historyParams+4).^2)-(ymesh-parameterVec(historyParams+3)).^2 ...
@@ -205,15 +207,21 @@ gaborFilter = parameterVec(historyParams+1)*exp(-(xmesh-parameterVec(historyPara
         parameterVec(historyParams+8));
 gaborFilter = gaborFilter(:);
 
-for kk=1:length(zz)
-%     onScreenStim = squeeze(newS(pointProcessStimTimes(zz(kk)),:,:));
-    if mod(kk,stimulusTime) == 1
-        filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
-    end
-    
-    loglikelihoodTwo(kk) = Y(zz(kk))*log(baseMu*exp(filterOutput))-baseMu*exp(filterOutput);
+% for kk=1:length(zz)
+% %     onScreenStim = squeeze(newS(pointProcessStimTimes(zz(kk)),:,:));
+%     if mod(kk,stimulusTime) == 1
+%         filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
+%     end
+%     
+%     loglikelihoodTwo(kk) = Y(zz(kk))*log(baseMu*exp(filterOutput))-baseMu*exp(filterOutput);
+% end
+
+for kk=1:numStimuli
+   filterOutput = sum(newS(kk,:)'.*gaborFilter)./numPixels;
+   loglikelihood(pointProcessStimTimes==kk) = Y(pointProcessStimTimes==kk).*log(baseMu*exp(filterOutput))-...
+       baseMu*exp(filterOutput);
 end
 
-loglikelihood = loglikelihoodOne+sum(loglikelihoodTwo);
+loglikelihood = sum(loglikelihood);
 end
 

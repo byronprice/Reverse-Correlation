@@ -413,9 +413,10 @@ end
 %     temp = temp-min(temp);temp = (temp./max(temp)).*255;
 %     temp = temp-(mean(temp)-127);
 %     newS(ii,:) = temp;
-%     %gaussOutput = newS(ii,:)'.*gauss(:);
-%     gaborOutput = newS(ii,:)'.*gabor(:);
-%     lambda = exp((sum(gaborOutput))/(N*N));
+%     tempIm = reshape(temp,[N,N]);
+%     gaussOutput = 1;%sum(sum(conv2(tempIm,gauss)));
+%     gaborOutput = sum(newS(ii,:)'.*gabor(:));
+%     lambda = exp((gaborOutput/gaussOutput)./(N*N));
 %     r(ii) = poissrnd(lambda);
 % end
 % 
@@ -444,12 +445,21 @@ end
 % end
 % bigLambda = [0,5e1,1e2,1e3,1e4,5e4,1e5,1e6,1e7,1e8];
 % RMS = zeros(length(bigLambda),1);
-% for ii=1:length(bigLambda)
+% parfor ii=1:length(bigLambda)
 %     A = [newS;bigLambda(ii).*L];
 %     constraints = [r;zeros(N*N,1)];
 %     fhat = pinv(A)*constraints;
-%     figure();subplot(2,1,1);imagesc(gabor);subplot(2,1,2);imagesc(reshape(fhat,[N,N]));
 %     RMS(ii) = (N*N)^(-0.5)*norm(r-newS*fhat);
 % end
+% rmsDiff = diff(RMS);lambdaDiff = diff(bigLambda)';
+% deltaRMSdeltaLambda = rmsDiff./lambdaDiff;
+% [maxVal,index] = max(abs(deltaRMSdeltaLambda));
+% onepercent = 0.01*maxVal;
+% firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
+% bestMap = index+firstBelow;
 % 
-% figure();plot(RMS);
+% A = [newS;bigLambda(bestMap).*L];
+% fhat = pinv(A)*constraints;
+% figure();subplot(2,1,1);imagesc(gabor);
+% subplot(2,1,2);imagesc(reshape(fhat,[N,N]));
+% title(sprintf('Lambda: %3.0e',bigLambda(bestMap)));
