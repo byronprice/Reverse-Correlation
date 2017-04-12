@@ -301,43 +301,49 @@ bigLambda = [0,5e1,1e2,5e2,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6,1e7,5e7,1e8];
 F = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
 uncorrectedF = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
 RMS = zeros(length(bigLambda),numChans,nunits1);
-for lambda = 1:length(bigLambda)
-    % VERTICALLY CONCATENATE S and L
-    % S is size numStimuli X effectivePixels
-    A = [newS(:,:);bigLambda(lambda).*L];
-    for ii=1:numChans
-        numNeurons = Neurons(ii,1);
-        for jj=1:numNeurons
-            
-            r = squeeze(Response(ii,jj+1,:));
-            constraints = [r;zeros(effectivePixels,1)];
-            %         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
-            %         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
-            
-            %         fhat = pinv(A)*constraints;
-            %         fhat = pinv(newS)*r;
-            % alternatively
-            %         fhat = newS\r;
-            
-%             fhat = A\constraints;
+
+
+for ii=1:numChans
+    numNeurons = Neurons(ii,1);
+    for jj=1:numNeurons
+        
+        r = squeeze(Response(ii,jj+1,:));
+        constraints = [r;zeros(effectivePixels,1)];
+        %         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
+        %         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
+        
+        %         fhat = pinv(A)*constraints;
+        %         fhat = pinv(newS)*r;
+        % alternatively
+        %         fhat = newS\r;
+        
+        %             fhat = A\constraints;
+
+        for lambda = 1:length(bigLambda)
+            % VERTICALLY CONCATENATE S and L
+            % S is size numStimuli X effectivePixels
+            A = [newS;bigLambda(lambda).*L];
             fhat = pinv(A)*constraints;
             
-            tempfhat = reshape(fhat,[N,N]);imagesc(xaxis,yaxis,tempfhat);colorbar;pause(1);
-            tempFFT = fft2(tempfhat);
             uncorrectedF(lambda,ii,jj+1,:) = fhat;
-            tempFFT = numStimuli.*tempFFT./S_f;
+            
+            tempfhat = reshape(fhat,[N,N]);%imagesc(xaxis,yaxis,tempfhat);colorbar;pause(1);
+            tempFFT = fft2(tempfhat);
+            tempFFT = numStimuli.*(tempFFT./S_f);
             tempIFFT = ifft2(tempFFT);%tempIFFT = sqrt(tempIFFT.*conj(tempIFFT));
             F(lambda,ii,jj+1,:) = tempIFFT(:);
-            RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS(:,:)*tempIFFT(:));
-%             subplot(numChans,maxNeurons,plotCount);
-%             imagesc(xaxis,yaxis,tempIFFT);set(gca,'YDir','normal');
-%             title(sprintf('Lambda %3.1e',bigLambda(lambda)));
-%             xlabel('Azimuth (degrees of visual arc)');
-%             ylabel('Altitude(degrees of visual arc)');
-%             plotCount = plotCount+1;
+            RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS*fhat);
+            
+            %             subplot(numChans,maxNeurons,plotCount);
+            %             imagesc(xaxis,yaxis,tempIFFT);set(gca,'YDir','normal');
+            %             title(sprintf('Lambda %3.1e',bigLambda(lambda)));
+            %             xlabel('Azimuth (degrees of visual arc)');
+            %             ylabel('Altitude(degrees of visual arc)');
+            %             plotCount = plotCount+1;
         end
     end
 end
+
 
 figure(1);figure(2);figure(3);
 bestMaps = zeros(numChans,nunits1);
@@ -345,13 +351,13 @@ plotCount = 1;
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
-        tempRMS = squeeze(RMS(:,ii,jj+1));
-        rmsDiff = diff(tempRMS);lambdaDiff = diff(bigLambda)';
+        tempRMS = squeeze(RMS(:,ii,jj+1))';
+        rmsDiff = diff(tempRMS);lambdaDiff = diff(bigLambda);
         deltaRMSdeltaLambda = rmsDiff./lambdaDiff;
         [maxVal,index] = max(abs(deltaRMSdeltaLambda));
         onepercent = 0.01*maxVal;
         firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
-        bestMaps(ii,jj+1) = index+firstBelow;
+        bestMaps(ii,jj+1) = index+firstBelow-1;
         
         figure(1);
         subplot(numChans,maxNeurons,plotCount);
@@ -412,7 +418,7 @@ end
 %     temp = newS(ii,:);
 %     temp = temp-min(temp);temp = (temp./max(temp)).*255;
 %     temp = temp-(mean(temp)-127);
-%     newS(ii,:) = temp;
+%     newS(ii,:) = temp-127;
 %     tempIm = reshape(temp,[N,N]);
 %     gaussOutput = 1;%sum(sum(conv2(tempIm,gauss)));
 %     gaborOutput = sum(newS(ii,:)'.*gabor(:));
@@ -456,7 +462,7 @@ end
 % [maxVal,index] = max(abs(deltaRMSdeltaLambda));
 % onepercent = 0.01*maxVal;
 % firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
-% bestMap = index+firstBelow;
+% bestMap = index+firstBelow-1;
 % 
 % A = [newS;bigLambda(bestMap).*L];
 % fhat = pinv(A)*constraints;

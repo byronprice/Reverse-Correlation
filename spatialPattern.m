@@ -44,15 +44,17 @@ function x = spatialPattern(DIM,BETA)
 % First quadrant are positive frequencies.  Zero frequency is at u(1,1).
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
 % Reproduce these frequencies along ever row
-u = repmat(u,1,DIM(2));
+U = repmat(u,1,DIM(2)); 
 % v is the set of frequencies along the second dimension.  For a square
 % region it will be the transpose of u
 v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]/DIM(2);
 % Reproduce these frequencies along ever column
-v = repmat(v,DIM(1),1);
+V = repmat(v,DIM(1),1);
+
+% [U,V] = meshgrid(u,v); U = U'; V = V';
 
 % Generate the power spectrum
-S_f = (u.^2 + v.^2).^(BETA/2);
+S_f = (U.^2 + V.^2).^(BETA/2);
 
 % Set any infinities to zero
 S_f(S_f==inf) = 0;
