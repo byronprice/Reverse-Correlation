@@ -92,7 +92,7 @@ degPerPix = atand((screenPix_to_effPix*conv_factor)/(DistToScreen*10));
 if strcmp(NoiseType,'white') == 1
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -1;
+    beta = -3;
     spaceExp = 2;
     timeExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
@@ -108,23 +108,26 @@ Grey = 127;
 % below white/pink/brown noise from Jon Yearsley
 DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 
-u = 0:(DIM(1)-1);v = 0:(DIM(2)-1);
-t = 0:(DIM(3)-1);
+u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
+v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
+t = [(0:floor(DIM(3)/2)) -(ceil(DIM(3)/2)-1:-1:1)]'/DIM(3);
 [U,V,T] = meshgrid(u,v,t);
 S_f = single((U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2));
 clear U V T u v t;
-S_f(S_f==inf) = 1;
+S_f(S_f==inf) = 0;
 % S_f = S_f.^0.5;
-noise = randn([DIM(2),DIM(1),DIM(3)],'single');
-Y = fftn(noise);
-Y = Y.*S_f;
-X = ifftn(Y);
-X = sqrt(X.*conj(X));
-%X = real(X);
-X = X-min(min(min(X)));
-X = (X./max(max(max(X)))).*255;
-meanVal = mean(mean(mean(X)));difference = meanVal-Grey;
-S = X-difference;
+phi = rand([DIM(2),DIM(1),DIM(3)],'single');
+X = ifftn(S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi)));
+X = real(X);
+
+for ii=1:numStimuli
+    temp = squeeze(X(:,:,ii));
+    temp = temp-min(min(temp));
+    temp = (temp./max(max(temp))).*255;
+    meanVal = mean(mean(temp));difference = meanVal-Grey;
+    X(:,:,ii) = temp-difference;
+end
+S = X;
 clear X Y S_f;WaitSecs(0.5);
 S = uint8(S(:,:,1:downSampleFactor:end));
 numStimuli = numStimuli/downSampleFactor;
@@ -137,7 +140,7 @@ ifi = Screen('GetFlipInterval', win);
 flipInterval = 1/movie_FrameRate;
 
 usb.startRecording;
-WaitSecs(30);
+WaitSecs(0);
 tt = 1;
 vbl = Screen('Flip', win);
 while tt <= numStimuli
@@ -161,7 +164,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','movie_FrameRate','effectivePixels','movieTime_Seconds',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
-    'conv_factor','beta','spaceExp','timeExp');
+    'conv_factor','beta','spaceExp','timeExp','DIM');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
