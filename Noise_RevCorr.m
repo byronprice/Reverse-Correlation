@@ -39,7 +39,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/02/03
+% Updated: 2017/04/11
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -74,7 +74,7 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 % Query window size in pixels
 [w_pixels,h_pixels] = Screen('WindowSize', win);
 minPix = min(w_pixels,h_pixels);
-maxPix = max(w_pixels,h_pixels)-250;
+maxPix = max(w_pixels,h_pixels)-200;
 
 % screen size in millimeters and a conversion factor to get from mm to pixels
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
@@ -88,7 +88,8 @@ minPix = minPix-mod(minPix,screenPix_to_effPix);
 
 effectivePixels = [maxPix/screenPix_to_effPix,minPix/screenPix_to_effPix];
 
-degPerPix = atand((screenPix_to_effPix*conv_factor)/(DistToScreen*10));
+gridSpacing = screenPix_to_effPix*conv_factor/10;
+spatialSampleFreq = 1/gridSpacing; % in units of 1/cm
 
 % GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
@@ -111,20 +112,13 @@ S = zeros(numStimuli,DIM(1)*DIM(2),'uint8');
 % below pink noise from Jon Yearsley, 1/f noise generate spatial data
 
 for ii=1:numStimuli
-    u = 0:(DIM(1)-1);v = 0:(DIM(2)-1);
-    [U,V] = meshgrid(u,v);
-    S_f = (U.^spaceExp+V.^spaceExp).^(beta/2);
-    S_f(S_f==inf) = 1;
-    noise = randn([DIM(2),DIM(1)],'single');
-    Y = fft2(noise);
-    Y = Y.*S_f;
-    X = ifft2(Y);
-    X = sqrt(X.*conj(X)); % real(X)
+    X = spatialPattern([DIM(2),DIM(1)],beta);
     X = X-min(min(X));
     X = (X./max(max(X))).*255;
-    y = X(:);
-    meanVal = mean(y);difference = meanVal-Grey;
-    S(ii,:) = y-difference;
+    Y = X(:);
+    meanVal = mean(Y);difference = meanVal-Grey;
+    %figure();imagesc(reshape(Y-difference,DIM));
+    S(ii,:) = Y-difference;
 end
 S = uint8(S);
 
@@ -143,7 +137,7 @@ while tt <= numStimuli
     Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
     Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
-    Screen('DrawTexture',win, tex);
+    Screen('DrawTexture',win,tex);
     vbl = Screen('Flip',win);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
@@ -161,7 +155,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
-    'conv_factor','WaitTimes','beta','spaceExp');
+    'conv_factor','WaitTimes','beta','spaceExp','DIM');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)

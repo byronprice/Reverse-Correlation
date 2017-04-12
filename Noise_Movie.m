@@ -19,7 +19,7 @@ function [] = Noise_Movie(AnimalName,NoiseType)
 %          the stimuli presented, try 
 %          image = reshape(S(1,:),[width,height]); to view one of the white
 %          noise stimuli
-%        effectivePixels - effective width (and height) of the display window 
+%        effectivePixels - effective width and height of the display window 
 %          in pixels, first chosen as the minimum of the width and height 
 %          of the current display ... the display is forced to be square
 %          and the width in effectivePixels is 1/4 the width in true screen
@@ -28,7 +28,7 @@ function [] = Noise_Movie(AnimalName,NoiseType)
 %
 % Created: 2017/03/24, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/03/24
+% Updated: 2017/04/11
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -48,7 +48,7 @@ AssertOpenGL;
 downSampleFactor = 1;
 numStimuli = movieTime_Seconds*movie_FrameRate*downSampleFactor;
 
-fprintf('\nEstimated time is %3.2f minutes.',movieTime_Seconds/60);
+fprintf('\nEstimated time is %3.2f minutes.',(movieTime_Seconds+30)/60);
 WaitSecs(5);
 
 % Choose screen with maximum id - the secondary display:
@@ -65,7 +65,7 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 % Query window size in pixels
 [w_pixels,h_pixels] = Screen('WindowSize', win);
 minPix = min(w_pixels,h_pixels);
-maxPix = max(w_pixels,h_pixels)-250;
+maxPix = max(w_pixels,h_pixels)-200;
 
 % screen size in millimeters and a conversion factor to get from mm to pixels
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
@@ -137,7 +137,7 @@ ifi = Screen('GetFlipInterval', win);
 flipInterval = 1/movie_FrameRate;
 
 usb.startRecording;
-WaitSecs(5);
+WaitSecs(30);
 tt = 1;
 vbl = Screen('Flip', win);
 while tt <= numStimuli
