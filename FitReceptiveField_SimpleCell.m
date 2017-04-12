@@ -1,4 +1,4 @@
-function [ output_args ] = FitReceptiveField_SimpleCell(AnimalName,Date,NoiseType)
+function [PosteriorSamples,PosteriorMean,PosteriorInterval] = FitReceptiveField_SimpleCell(AnimalName,Date,NoiseType)
 %FitReceptiveField_SimpleCell.m
 %  Use data from a receptive-field mapping experiment and fit a Gabor model
 %   to obtain the spatial receptive field for a simple cell in L4 of V1.
@@ -74,6 +74,7 @@ historyParams = 1;
 gaborParams = 8;
 numParameters = historyParams+gaborParams;
 
+twopi = 2*pi;
 Bounds = zeros(numParameters,2);
 Bounds(1:historyParams,:) = ones(historyParams,2).*[-250,50];
 Bounds(historyParams+1,:) = [0,1]; % height of Gabor parameter
@@ -82,12 +83,8 @@ Bounds(historyParams+3,:) = [min(yaxis)-5,max(yaxis)+5]; % y center
 Bounds(historyParams+4,:) = [0,20]; % standard deviation x
 Bounds(historyParams+5,:) = [0,20]; % standard deviation y
 Bounds(historyParams+6,:) = [0,10]; % spatial frequency
-Bounds(historyParams+7,:) = [0,2*pi]; %  orientation theta
-Bounds(historyParams+8,:) = [0,2*pi]; % phase shift phi
-
-finalParameters = zeros(numChans,nunits1,numParameters);
-fisherInfo = zeros(numChans,nunits1,numParameters,numParameters);
-ninetyfiveErrors = zeros(numChans,nunits1,numParameters);
+Bounds(historyParams+7,:) = [0,twopi]; %  orientation theta
+Bounds(historyParams+8,:) = [0,twopi]; % phase shift phi
 
 % convert timeStamps to point process
 totalTime = strobeData(end)+2;
@@ -129,7 +126,7 @@ for zz=1:numChans
         h = ones(numParameters,1)./1000;
         % repeat gradient ascent from a number of different starting
         %  positions
-        numIter = 1e6;burnIn = 2e5;
+        numIter = 5e5;burnIn = 1e5;
         parameterVec = zeros(numParameters,numIter);
         
         parameterVec(1,1) = normrnd(-50,50);
@@ -142,10 +139,10 @@ for zz=1:numChans
         
         parameterVec(:,1) = max(Bounds(1:numParameters,1),min(parameterVec(:,1),Bounds(1:numParameters,2)));
         
-        tic % currently requires 0.05 seconds ... 0.0864 seconds
+        % currently requires 0.045 seconds ... 0.0864 seconds
         %  just to get it to run in 1 day
         likelihoodXprev = GetLikelihood(parameterVec(:,1));
-        toc
+
         
         sigma = zeros(numParameters,1);
         sigma(1:historyParams) = ones(historyParams,1).*10;
@@ -161,8 +158,10 @@ for zz=1:numChans
         rejectRate = 0;
         for iter = 2:numIter
             xStar = parameterVec(:,iter)+normrnd(0,sigma,[numParameters,1]);
+            xStar(historyParams+7:historyParams+8) = mod(xStar(historyParams+7:historyParams+8),twopi);
+            temp = xStar(1:historyParams+6)-Bounds(1:historyParams+6,1);
             
-            if sum(xStar<0) > 0 % outside bounds
+            if sum(temp<0) > 0 % outside bounds
                 parameterVec(:,iter) = parameterVec(:,iter-1);
                 rejectRate = rejectRate+1;
             else
@@ -181,6 +180,23 @@ for zz=1:numChans
                 
         end
         
+        fprintf('Rejection Rate: %3.2f',rejectRate/numIter);
+        
+        PosteriorSamples = parameterVec(:,burnIn:40:numIter);
+        
+        PosteriorMean = zeros(numParameters,1);
+        PosteriorInterval = zeros(numParameters,2);
+        alpha = 0.05;
+        
+        numColumns = 4;
+        numRows = floor(numParameters/numColumns)+mod(numParameters,numColumns);
+        for ii=1:numParameters
+           subplot(numRows,numColumns,ii);
+           histogram(PosteriorSamples(ii,:));
+           title('Marginal Posterior, Parameter %d',ii);
+           PosteriorMean(ii) = mean(PosteriorSamples(ii,:));
+           PosteriorInterval(ii,:) = quantile(PosteriorSamples(ii,:),[alpha/2,1-alpha/2]);
+        end
        
     end
 end
@@ -189,15 +205,13 @@ end
 end
 
 function [loglikelihood] = GetLikelihood(parameterVec)
-global totalMillisecs newS pointProcessStimTimes historyParams xmesh ymesh numPixels ...
-    historyDesign Y numStimuli;
+global newS pointProcessStimTimes historyParams xmesh ymesh numPixels ...
+    historyDesign Y stimulusTime;
 
-loglikelihood = zeros(totalMillisecs,1);
 baseMu = exp(historyDesign(1,:)*parameterVec(1:historyParams));
-loglikelihood(pointProcessStimTimes==0) = Y(pointProcessStimTimes==0).*log(baseMu)-baseMu;
+loglikelihood = sum(Y(pointProcessStimTimes==0).*log(baseMu)-baseMu);
 
-% zz = find(pointProcessStimTimes~=0);
-% loglikelihoodTwo = zeros(length(zz),1);
+
 
 gaborFilter = parameterVec(historyParams+1)*exp(-(xmesh-parameterVec(historyParams+2)).^2 ...
         ./(2*parameterVec(historyParams+4).^2)-(ymesh-parameterVec(historyParams+3)).^2 ...
@@ -207,21 +221,25 @@ gaborFilter = parameterVec(historyParams+1)*exp(-(xmesh-parameterVec(historyPara
         parameterVec(historyParams+8));
 gaborFilter = gaborFilter(:);
 
-% for kk=1:length(zz)
-% %     onScreenStim = squeeze(newS(pointProcessStimTimes(zz(kk)),:,:));
+zz = find(pointProcessStimTimes~=0);
+loglikelihoodTwo = zeros(length(zz),1);
+
+for kk=1:stimulusTime:length(zz)
+%     onScreenStim = squeeze(newS(pointProcessStimTimes(zz(kk)),:,:));
 %     if mod(kk,stimulusTime) == 1
 %         filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
 %     end
-%     
-%     loglikelihoodTwo(kk) = Y(zz(kk))*log(baseMu*exp(filterOutput))-baseMu*exp(filterOutput);
-% end
-
-for kk=1:numStimuli
-   filterOutput = sum(newS(kk,:)'.*gaborFilter)./numPixels;
-   loglikelihood(pointProcessStimTimes==kk) = Y(pointProcessStimTimes==kk).*log(baseMu*exp(filterOutput))-...
-       baseMu*exp(filterOutput);
+    filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
+    
+    loglikelihoodTwo(kk:kk+stimulusTime-1) = Y(zz(kk:kk+stimulusTime-1))*log(baseMu*exp(filterOutput))-baseMu*exp(filterOutput);
 end
 
-loglikelihood = sum(loglikelihood);
+% for kk=1:numStimuli
+%    filterOutput = sum(newS(kk,:)'.*gaborFilter)./numPixels;
+%    loglikelihood(pointProcessStimTimes==kk) = Y(pointProcessStimTimes==kk).*log(baseMu*exp(filterOutput))-...
+%        baseMu*exp(filterOutput);
+% end
+
+loglikelihood = loglikelihood+sum(loglikelihoodTwo);
 end
 
