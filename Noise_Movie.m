@@ -12,8 +12,8 @@ function [] = Noise_Movie(AnimalName,NoiseType)
 %
 %       see file MovieNoiseVars.mat for more changeable presets
 %
-%OUTPUT: file named 'NoiseStimDate_AnimalName.mat' , e.g. 
-%          NoiseStim20160718_12345.mat
+%OUTPUT: file named 'NoiseStimNoiseTypeDate_AnimalName.mat' , e.g. 
+%          NoiseStimpink20160718_12345.mat
 %
 %        S - matrix sized numStimuli-by-numPixels that represent each of
 %          the stimuli presented, try 
@@ -79,7 +79,7 @@ conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
-screenPix_to_effPix = 30;
+screenPix_to_effPix = 25;
 maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 numPixels = maxPix*minPix;
@@ -90,22 +90,26 @@ degPerPix = atand((screenPix_to_effPix*conv_factor)/(DistToScreen*10));
 
 % GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
+    spaceExp = 2;
+    timeExp = 2;
     beta = 0;
 elseif strcmp(NoiseType,'pink') == 1
     beta = -3;
     spaceExp = 2;
     timeExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
+    spaceExp = 2;
+    timeExp = 2;
     beta = -6;
 else 
     fprintf('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.\n');
     return;
 end
 
-Grey = 127;
+
 %S = zeros(effectivePixels(1),effectivePixels(2),numStimuli,'uint8');
 
-% below white/pink/brown noise from Jon Yearsley
+% below white/pink/brown noise modified from Jon Yearsley
 DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
@@ -120,17 +124,24 @@ phi = rand([DIM(2),DIM(1),DIM(3)],'single');
 X = ifftn(S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi)));
 X = real(X);
 
+desiredMin = 0;
+desiredMax = 255;
+Grey = 127;
 for ii=1:numStimuli
-    temp = squeeze(X(:,:,ii));
-    temp = temp-min(min(temp));
-    temp = (temp./max(max(temp))).*255;
-    meanVal = mean(mean(temp));difference = meanVal-Grey;
+    temp = X(:,:,ii);
+    currentMax = max(temp(:));
+    currentMin = min(temp(:));
+    temp = (desiredMax-desiredMin)./(currentMax-currentMin).*(temp-currentMax)+desiredMax;
+    difference = mean(temp(:))-Grey;
     X(:,:,ii) = temp-difference;
 end
-S = X;
-clear X Y S_f;WaitSecs(0.5);
-S = uint8(S(:,:,1:downSampleFactor:end));
+% currentMax = max(max(max(X)));
+% currentMin = min(min(min(X)));
+% X = (desiredMax-desiredMin)./(currentMax-currentMin).*(X-currentMax)+desiredMax;
+
+S = uint8(X(:,:,1:downSampleFactor:end));
 numStimuli = numStimuli/downSampleFactor;
+clear X Y S_f;WaitSecs(0.5);
 
 Priority(9);
 % Retrieve monitor refresh duration
@@ -140,7 +151,7 @@ ifi = Screen('GetFlipInterval', win);
 flipInterval = 1/movie_FrameRate;
 
 usb.startRecording;
-WaitSecs(0);
+WaitSecs(30);
 tt = 1;
 vbl = Screen('Flip', win);
 while tt <= numStimuli
