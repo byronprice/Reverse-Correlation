@@ -120,10 +120,11 @@ S_f = single((U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2));
 clear U V T u v t;
 S_f(S_f==inf) = 0;
 % S_f = S_f.^0.5;
-phi = rand([DIM(2),DIM(1),DIM(3)],'single');
+phi = rand([DIM(2),DIM(1),DIM(3)*2],'single');
 X = ifftn(S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi)));
 X = real(X);
 
+X = X(:,:,1:numStimuli);
 desiredMin = 0;
 desiredMax = 255;
 Grey = 127;

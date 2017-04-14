@@ -82,11 +82,34 @@ load(StimulusFileName)
 
 % generate theoretical stimulus power spectrum
 N = sqrt(effectivePixels);
-u = 0:(N-1);
-[U,V] = meshgrid(u,u);
-S_f = (U.^spaceExp+V.^spaceExp).^(beta/2);
-S_f(S_f==inf) = 1;
+DIM = [N,N];
 
+u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
+% Reproduce these frequencies along ever row
+U = repmat(u,1,DIM(2)); 
+% v is the set of frequencies along the second dimension.  For a square
+% region it will be the transpose of u
+v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]/DIM(2);
+% Reproduce these frequencies along ever column
+V = repmat(v,DIM(1),1);
+
+% [U,V] = meshgrid(u,v); U = U'; V = V';
+% Generate the power spectrum
+S_f = (U.^2 + V.^2).^(beta/2);
+
+% Set any infinities to zero
+S_f(S_f==inf) = 0;
+
+tempSf = S_f; tempSf(tempSf==0) = 1;
+
+% correct power spectrum of the images to remove bias in RF estimate
+%  I control the image generation so we know the theoretical power spectrum
+parfor ii=1:numStimuli
+    tempS = reshape(S(ii,:),[N,N]);
+    tempFFT = fft2(tempS);
+    correctedIm = ifft2(tempFFT./tempSf);
+    S(ii,:) = correctedIm(:);
+end
 
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
@@ -119,7 +142,7 @@ for ii=1:numStimuli
     if mod(ii,2) == 1
         newS(ii,:) = S(floor(ii/2)+1,:);
     elseif mod(ii,2) == 0
-        newS(ii,:) = 255-S(ii/2,:); %255-S(ii/2,:)
+        newS(ii,:) = S(ii/2,:); %255-S(ii/2,:)
 %         temp = reshape(S(ii/2,:),[N,N]);
 %         temp2 = reshape(255-S(ii/2,:),[N,N]);
 %         figure();imagesc(temp);
@@ -260,7 +283,7 @@ for jj=1:N
 end
 
 
-stimLen = 0.06;
+stimLen = 0.07;
 
 totalTime = strobeData(end)+2;
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
@@ -269,7 +292,7 @@ baseRate = zeros(numChans,nunits1);
 for ii=1:numChans
     numNeurons = Neurons(ii,1);
     for jj=1:numNeurons
-        stimStart = 0.6;%stimStartTimes(ii,jj+1);
+        stimStart = 0.05;%stimStartTimes(ii,jj+1);
         baseRate(ii,jj+1) = length(allts{ii,jj+1})./totalTime;
         %             display(baseRate(ii,jj));
         %         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
@@ -279,12 +302,12 @@ for ii=1:numChans
             low = find(allts{ii,jj+1} < (stimOnset+stimStart+stimLen));
             temp = intersect(low,high);
             
-            Response(ii,jj+1,kk) = length(temp);
-%             if mod(kk,2) == 1
-%                 Response(ii,jj+1,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1)-1;
-%             elseif mod(kk,2) == 0
-%                 Response(ii,jj+1,kk) = -(length(temp)./stimLen)./baseRate(ii,jj+1)+1; 
-%             end
+            %Response(ii,jj+1,kk) = length(temp);
+            if mod(kk,2) == 1
+                Response(ii,jj+1,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1);%-1
+            elseif mod(kk,2) == 0
+                Response(ii,jj+1,kk) = -(length(temp)./stimLen)./baseRate(ii,jj+1); %+1
+            end
             
         end
     end
@@ -292,14 +315,15 @@ end
 
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
-degreesVisualSpace = degPerPix*screenPix_to_effPix*N;
-xaxis = linspace(-degreesVisualSpace/2,degreesVisualSpace/2,N);
-yaxis = linspace(-degreesVisualSpace/4,3*degreesVisualSpace/4,N);
+horzDegrees = atand((screenPix_to_effPix*N*conv_factor/10)/DistToScreen);
+vertDegrees = atand((screenPix_to_effPix*N*conv_factor/10)/DistToScreen);
+xaxis = linspace(-horzDegrees/2,horzDegrees/2,N);
+yaxis = linspace(-vertDegrees/4,3*vertDegrees/4,N);
 maxNeurons = max(Neurons);
 
-bigLambda = [0,5e1,1e2,5e2,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6,1e7,5e7,1e8];
+bigLambda = [0,5e1,1e2,5e2,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6,1e7];
 F = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
-uncorrectedF = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
+
 RMS = zeros(length(bigLambda),numChans,nunits1);
 
 
@@ -325,13 +349,7 @@ for ii=1:numChans
             A = [newS;bigLambda(lambda).*L];
             fhat = pinv(A)*constraints;
             
-            uncorrectedF(lambda,ii,jj+1,:) = fhat;
-            
-            tempfhat = reshape(fhat,[N,N]);%imagesc(xaxis,yaxis,tempfhat);colorbar;pause(1);
-            tempFFT = fft2(tempfhat);
-            tempFFT = numStimuli.*(tempFFT./S_f);
-            tempIFFT = ifft2(tempFFT);%tempIFFT = sqrt(tempIFFT.*conj(tempIFFT));
-            F(lambda,ii,jj+1,:) = tempIFFT(:);
+            F(lambda,ii,jj+1,:) = fhat;
             RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS*fhat);
             
             %             subplot(numChans,maxNeurons,plotCount);
@@ -344,8 +362,7 @@ for ii=1:numChans
     end
 end
 
-
-figure(1);figure(2);figure(3);
+h(1) = figure();%h(2) = figure();
 bestMaps = zeros(numChans,nunits1);
 plotCount = 1;
 for ii=1:numChans
@@ -359,22 +376,15 @@ for ii=1:numChans
         firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
         bestMaps(ii,jj+1) = index+firstBelow-1;
         
-        figure(1);
+        figure(h(1));
         subplot(numChans,maxNeurons,plotCount);
         imagesc(xaxis,yaxis,reshape(F(index+firstBelow,ii,jj+1,:),[N,N]));set(gca,'YDir','normal');
-        title(sprintf('Unbiased Chan %d, Neuron %d',ii,jj));
+        title(sprintf('Unbiased RF Chan %d, Neuron %d',ii,jj));
         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
         
-        figure(2);
-        subplot(numChans,maxNeurons,plotCount);
-        imagesc(xaxis,yaxis,reshape(uncorrectedF(index+firstBelow,ii,jj+1,:),[N,N]));set(gca,'YDir','normal');
-        title(sprintf('Biased Chan %d, Neuron %d',ii,jj));
-        xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
-        
-        
-        figure(3);
-        subplot(numChans,maxNeurons,plotCount)
-        plot(log10(bigLambda),squeeze(RMS(:,ii,jj+1)));
+%         figure(h(2));
+%         subplot(numChans,maxNeurons,plotCount)
+%         plot(log10(bigLambda),squeeze(RMS(:,ii,jj+1)));
         
         plotCount = plotCount+1;
     end
@@ -382,8 +392,7 @@ end
 
 FileName = strcat('NoiseResults',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 save(FileName,'F','newS','Response','allts','bigLambda','numChans','nunits1',...
-    'Neurons','beta','spaceExp','N','significantVisualResponsiveness','RMS',...
-    'stimStartTimes','bestMaps','uncorrectedF');
+    'Neurons','beta','spaceExp','N','RMS','bestMaps');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans

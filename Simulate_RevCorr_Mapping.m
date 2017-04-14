@@ -23,6 +23,7 @@ S_f = (U.^2 + V.^2).^(beta/2);
 % Set any infinities to zero
 S_f(S_f==inf) = 0;
 
+tempSf = S_f; tempSf(tempSf==0) = 1;
 
 gaborFilter = @(x,y) exp(-x.^2./(2*3*3)-y.^2./(2*3*3)).*sin(2*pi*0.05.*(x.*cos(pi/4)+y.*sin(pi/4)));
 gaussFilter = @(x,y) exp(-x.^2./(2*3*3)-y.^2./(2*3*3));
@@ -33,18 +34,29 @@ gabor = gaborFilter(X,Y);
 gauss = gaussFilter(X,Y);
 r = zeros(numStimuli,1);
 filterOutput = zeros(numStimuli,1);
+
+desiredMax = 255;
+desiredMin = 0;
 parfor ii=1:numStimuli
     X = spatialPattern(DIM,beta);
-    X = X-min(min(X));
-    X = (X./max(max(X))).*255;
-    Y = X(:);
-    meanVal = mean(Y);difference = meanVal-127;
-    newS(ii,:) = Y-difference;
-    gaussOutput = 1;%sum(sum(conv2(tempIm,gauss)));
-    gaborOutput = sum(newS(ii,:)'.*gabor(:));
-    lambda = exp((gaborOutput/gaussOutput)./(N*N));
+    currentMax = max(X(:));
+    currentMin = min(X(:));
+    Y = (desiredMax)./(currentMax-currentMin).*(X-currentMax)+desiredMax;
+    meanVal = mean(Y(:));difference = meanVal-127;
+    Y = Y-difference;
+    
+    gaussIm = 1;%conv2(Y,gauss,'same');
+    contrastIm = Y./gaussIm;
+    filteredIm = contrastIm.*gabor;
+    gaborOutput = sum(filteredIm(:));
+    lambda = exp(gaborOutput./(N*N));
     r(ii) = poissrnd(lambda);
     filterOutput(ii) = gaborOutput;
+    
+    % correct for biased power spectrum
+    tempFFT = fft2(Y);
+    corrected = ifft2(tempFFT./tempSf);
+    newS(ii,:) = corrected(:);
 end
 
 L = zeros(N*N,N*N,'single');
@@ -77,6 +89,7 @@ parfor ii=1:length(bigLambda)
     constraints = [r;zeros(N*N,1)];
     fhat = pinv(A)*constraints;
     RMS(ii) = (N*N)^(-0.5)*norm(r-newS*fhat);
+   % figure();imagesc(reshape(fhat,[N,N]));
 end
 rmsDiff = diff(RMS);lambdaDiff = diff(bigLambda)';
 deltaRMSdeltaLambda = rmsDiff./lambdaDiff;
@@ -89,15 +102,14 @@ constraints = [r;zeros(N*N,1)];
 A = [newS;bigLambda(bestMap).*L];
 fhat = pinv(A)*constraints;
 
-figure();subplot(4,1,1);imagesc(reshape(newS(10,:),[N,N]));
+X = spatialPattern(DIM,beta);
+currentMax = max(X(:));
+currentMin = min(X(:));
+Y = (desiredMax)./(currentMax-currentMin).*(X-currentMax)+desiredMax;
+meanVal = mean(Y(:));difference = meanVal-127;
+Y = Y-difference;
+figure();subplot(3,1,1);imagesc(Y);
 title('Example Image');
-subplot(4,1,2);imagesc(gabor);title('Gabor Filter');
-subplot(4,1,3);imagesc(reshape(fhat,[N,N]));
-title(sprintf('Biased RF, Lambda: %3.0e',bigLambda(bestMap)));
-
-S_f(S_f==0) = 1;
-tempFFT = fft2(reshape(fhat,[N,N]));
-correctedFhat = ifft2(numStimuli.*tempFFT./S_f);
-correctedFhat = correctedFhat.*conj(correctedFhat);
-subplot(4,1,4);imagesc(correctedFhat);
-title(sprintf('Unbiased RF'));
+subplot(3,1,2);imagesc(gabor);title('Gabor Filter');
+subplot(3,1,3);imagesc(reshape(fhat,[N,N]));
+title(sprintf('Unbiased RF, Lambda: %3.0e',bigLambda(bestMap)));
