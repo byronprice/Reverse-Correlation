@@ -114,7 +114,7 @@ DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
 v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
-t = [(0:floor(DIM(3)/2)) -(ceil(DIM(3)/2)-1:-1:1)]'/DIM(3);
+t = [(0:floor(DIM(3)*2/2)) -(ceil(DIM(3)*2/2)-1:-1:1)]'/(2*DIM(3));
 [U,V,T] = meshgrid(u,v,t);
 S_f = single((U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2));
 clear U V T u v t;
