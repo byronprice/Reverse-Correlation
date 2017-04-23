@@ -2,7 +2,8 @@ function [] = Noise_Movie(AnimalName,NoiseType)
 %Noise_Movie.m
 %   Display a movie of noise stimuli to infer the receptive fields
 %    of neurons using reverse correlation or a GLM point process model
-%    See Smyth et al. 2003 Receptive Field Organization ...
+%    See Smyth et al. 2003 Receptive Field Organization for evaluation of 
+%     spatial (not spatiotemporal) receptive fields using natural images
 %
 %
 %INPUT: AnimalName - unique identifier for the animal as a number, e.g.
@@ -127,7 +128,7 @@ X = real(X);
 X = X(:,:,1:numStimuli);
 desiredMin = 0;
 desiredMax = 255;
-Grey = 127;
+Grey = 127;%desiredStd = 38;
 for ii=1:numStimuli
     temp = X(:,:,ii);
     currentMax = max(temp(:));
@@ -165,7 +166,7 @@ while tt <= numStimuli
     Screen('Close',tex);
     tt = tt+1;
 end
-WaitSecs(2);
+WaitSecs(30);
 usb.stopRecording;
 % Close window
 Screen('CloseAll');
