@@ -19,11 +19,12 @@ for jj=1:100
     S_f(S_f==inf) = 0;
     % S_f = S_f.^0.5;
     phi = rand([DIM(2),DIM(1),DIM(3)*2],'single');
-    X = ifftn(S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi)));
+    tempFFT = S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi));
+    X = ifftn(tempFFT);
     X = real(X);
     
     % get unbiased movie
-    tempFFT = fftn(X);S_f(S_f==0) = 1;
+    S_f(S_f==0) = 1;
     unbiasedS = ifftn(tempFFT./S_f);
     unbiasedS = unbiasedS(:,:,1:numStimuli);
     
@@ -49,9 +50,7 @@ for jj=1:100
     % currentMax = max(max(max(X)));
     % currentMin = min(min(min(X)));
     % X = (desiredMax-desiredMin)./(currentMax-currentMin).*(X-currentMax)+desiredMax;
-    downSampleFactor = 1;
-    S = uint8(X(:,:,1:downSampleFactor:end));
-    numStimuli = numStimuli/downSampleFactor;
+    S = uint8(X);
     clear X Y S_f;
     unbiasedS = uint8(unbiasedS);
     movie_FrameRate = 60;

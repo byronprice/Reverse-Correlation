@@ -30,9 +30,9 @@ gaborFilter = @(x,y) exp(-x.^2./(2*3*3)-y.^2./(2*3*3)).*sin(2*pi*0.05.*(x.*cos(p
 gaussFilter = @(x,y,xCen,yCen,std) exp(-(x-xCen).^2./(2*std*std)-(y-yCen).^2./(2*std*std));
 
 x = linspace(-20,20,N);y = linspace(-20,20,N);
-[X,Y] = meshgrid(x,y);
-gabor = gaborFilter(X,Y);
-gauss = gaussFilter(X,Y,0,0,3);
+[x,y] = meshgrid(x,y);
+gabor = gaborFilter(x,y);
+gauss = gaussFilter(x,y,0,0,3);
 r = zeros(numStimuli,1);
 filterOutput = zeros(numStimuli,1);
 
@@ -89,25 +89,32 @@ numBasis = N*N/4;
 xCen = linspace(-20,20,N/2);
 yCen = linspace(-20,20,N/2);
 
-basisFuns = zeros(N*N,numBasis);
-basisStd = 0.85;
-count = 1;
-for ii=1:length(xCen)
-    for jj=1:length(yCen)
-        gauss = gaussFilter(X,Y,xCen(ii),yCen(jj),basisStd);
-        basisFuns(:,count) = gauss(:)./sum(gauss(:));
-        count = count+1;
+normalDeviance = zeros(8,1);
+poissonDeviance = zeros(8,1);
+bigCount = 1;
+for basisStd = [0.5,1,2,5,10,50]
+    basisFuns = zeros(N*N,numBasis);
+    count = 1;
+    for ii=1:length(xCen)
+        for jj=1:length(yCen)
+            gauss = gaussFilter(x,y,xCen(ii),yCen(jj),basisStd);
+            basisFuns(:,count) = gauss(:)./sum(gauss(:));
+            count = count+1;
+        end
     end
+    
+    Design = newS*basisFuns;
+    [b,dev,stats] = glmfit(Design,r,'poisson','link','identity');
+    poissonDeviance(bigCount) = dev;
+    yhat = glmval(b,basisFuns,'identity');
+    figure();imagesc(reshape(yhat,[N,N]));title(sprintf('Poisson GLM: STD %3.1f',basisStd));
+    [b2,dev2,stats2] = glmfit(Design,r,'normal');
+    normalDeviance(bigCount) = dev2;bigCount = bigCount+1;
+    yhat = glmval(b2,basisFuns,'identity');
+    figure();imagesc(reshape(yhat,[N,N]));
+    title(sprintf('Normal GLM: STD %3.1f',basisStd));
 end
-
-Design = newS*basisFuns;
-[b,dev,stats] = glmfit(Design,r,'poisson');
-yhat = glmval(b,basisFuns,'log');
-figure();imagesc(reshape(yhat,[N,N]));title('Gaussian Basis Functions: Poisson GLM');
-[b2,dev2,stats2] = glmfit(Design,r,'normal');
-yhat = glmval(b2,basisFuns,'identity');
-figure();imagesc(reshape(yhat,[N,N]));
-title('Gaussian Basis Functions: Normal GLM');
+figure();subplot(2,1,1);plot(normalDeviance);subplot(2,1,2);plot(poissonDeviance);
 
 bigLambda = [0,5e1,1e2,1e3,1e4,5e4,1e5,5e5];
 RMS = zeros(length(bigLambda),1);

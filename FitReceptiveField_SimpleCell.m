@@ -4,7 +4,7 @@ function [PosteriorSamples,PosteriorMean,PosteriorInterval] = FitReceptiveField_
 %   to obtain the spatial receptive field for a simple cell in L4 of V1.
 
 % declare global variables
-global xmesh ymesh numPixels numStimuli totalMillisecs Y pointProcessStimTimes h ...
+global numPixels numStimuli totalMillisecs Y pointProcessStimTimes h ...
     historyDesign newS numParameters historyParams gaborParams stimulusTime;
 % read in the .plx file
 beta = 0;
@@ -19,38 +19,63 @@ StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(Animal
 load(EphysFileName,'nunits1','allts','svStrobed','tsevs')
 load(StimulusFileName)
 
-% generate theoretical stimulus power spectrum
-N = sqrt(effectivePixels);
-u = 0:(N-1);v = 0:(N-1);
-[U,V] = meshgrid(u,v);
-S_f = (U.^spaceExp+V.^spaceExp).^(beta/2);
-S_f(S_f==inf) = 1;
 
-xaxis = linspace(-N/2,N/2,N);
-yaxis = linspace(-N/4,3*N/4,N);
-[xmesh,ymesh] = meshgrid(xaxis,yaxis);
+% generate theoretical stimulus power spectrum
+if length(effectivePixels) == 1
+    N = sqrt(effectivePixels);
+    DIM = [N,N];
+else
+   DIM = effectivePixels; 
+end
+
+u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
+% Reproduce these frequencies along ever row
+U = repmat(u,1,DIM(2)); 
+% v is the set of frequencies along the second dimension.  For a square
+% region it will be the transpose of u
+v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]/DIM(2);
+% Reproduce these frequencies along ever column
+V = repmat(v,DIM(1),1);
+
+% [U,V] = meshgrid(u,v); U = U'; V = V';
+% Generate the power spectrum
+S_f = (U.^2 + V.^2).^(beta/2);
+
+% Set any infinities to zero
+S_f(S_f==inf) = 0;
+
+tempSf = S_f; tempSf(tempSf==0) = 1;
+
+% correct power spectrum of the images to remove bias in RF estimate
+%  I control the image generation so we know the theoretical power spectrum
+parfor ii=1:numStimuli
+    tempS = reshape(S(ii,:),[DIM(1),DIM(2)]);
+    tempFFT = fft2(tempS);
+    correctedIm = ifft2(tempFFT./tempSf);
+    S(ii,:) = correctedIm(:);
+end
 
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
+totalUnits = sum(sum(temp));
 
 % tsevs are the strobed times of stimulus onset, then offset
 %  Onset at tsevs{1,33}(2), offset at tsevs{1,33}(3), onset at
 %  tsevs{1,33}(4), offset at 5, etc.
 
 %x = find(~cellfun(@isempty,tsevs));
-strobeStart = 3;
 
-temp = cell(numChans,nunits1);
+temp = cell(totalUnits,1);
+count = 1;
 for ii=1:numChans
     for jj=1:nunits1
         if isempty(allts{jj,Chans(ii)}) == 0
-            temp{ii,jj} = allts{jj,Chans(ii)};
+            temp{count} = allts{jj,Chans(ii)};
+            count = count+1;
         end
     end
 end
 allts = temp;
-fullSpots = 1-cellfun(@isempty,allts);
-Neurons = sum(fullSpots,2);
 
 % ASSUME THAT A RESPONSE TO A STIMULUS OFFSET IS THE SAME AS A RESPONSE TO
 %  THE NEGATIVE OF THAT IMAGE, image created with values from 0 to 255
@@ -65,12 +90,13 @@ for ii=1:numStimuli
         newS(ii,:) = 255-S(ii/2,:); %255-S(ii/2,:)
     end
 end
-newS = Grey-newS;
+% newS = Grey-newS;
 clear S;
 
+strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-historyParams = 1;
+historyParams = 20;
 gaborParams = 8;
 numParameters = historyParams+gaborParams;
 
@@ -99,16 +125,14 @@ for kk=1:numStimuli
     pointProcessStimTimes((stimTimes(kk)+stimOnset):(stimTimes(kk)+stimOffset)) = kk;
 end
 
-for zz=1:numChans
-    numNeurons = Neurons(zz);
-    for yy=1:numNeurons
+for zz=1:totalUnits
         % ORGANIZE DATA
         
         Y = zeros(totalMillisecs,1);
         historyDesign = zeros(totalMillisecs,historyParams);
         
         % convert spike times to point process
-        temp = round(allts{zz,yy+1}.*1000);
+        temp = round(allts{zz}.*1000);
         for kk=1:length(temp)
             Y(temp(kk)) = 1;
         end
@@ -197,8 +221,6 @@ for zz=1:numChans
            PosteriorMean(ii) = mean(PosteriorSamples(ii,:));
            PosteriorInterval(ii,:) = quantile(PosteriorSamples(ii,:),[alpha/2,1-alpha/2]);
         end
-       
-    end
 end
 
 

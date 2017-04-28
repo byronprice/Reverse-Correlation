@@ -81,8 +81,12 @@ load(EphysFileName)
 load(StimulusFileName)
 
 % generate theoretical stimulus power spectrum
-N = sqrt(effectivePixels);
-DIM = [N,N];
+if length(effectivePixels) == 1
+    N = sqrt(effectivePixels);
+    DIM = [N,N];
+else
+   DIM = effectivePixels; 
+end
 
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
 % Reproduce these frequencies along ever row
@@ -105,7 +109,7 @@ tempSf = S_f; tempSf(tempSf==0) = 1;
 % correct power spectrum of the images to remove bias in RF estimate
 %  I control the image generation so we know the theoretical power spectrum
 parfor ii=1:numStimuli
-    tempS = reshape(S(ii,:),[N,N]);
+    tempS = reshape(S(ii,:),[DIM(1),DIM(2)]);
     tempFFT = fft2(tempS);
     correctedIm = ifft2(tempFFT./tempSf);
     S(ii,:) = correctedIm(:);
@@ -113,25 +117,25 @@ end
 
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
+totalUnits = sum(sum(temp));
 
 % tsevs are the strobed times of stimulus onset, then offset
 %  Onset at tsevs{1,33}(2), offset at tsevs{1,33}(3), onset at
 %  tsevs{1,33}(4), offset at 5, etc.
 
 %x = find(~cellfun(@isempty,tsevs));
-strobeStart = 3;
 
-temp = cell(numChans,nunits1);
+temp = cell(totalUnits,1);
+count = 1;
 for ii=1:numChans
     for jj=1:nunits1
         if isempty(allts{jj,Chans(ii)}) == 0
-            temp{ii,jj} = allts{jj,Chans(ii)};
+            temp{count} = allts{jj,Chans(ii)};
+            count = count+1;
         end
     end
 end
 allts = temp;
-fullSpots = 1-cellfun(@isempty,allts);
-Neurons = sum(fullSpots,2);
 
 % ASSUME THAT A RESPONSE TO A STIMULUS OFFSET IS THE SAME AS A RESPONSE TO
 %  THE NEGATIVE OF THAT IMAGE, image created with values from 0 to 255
@@ -142,7 +146,7 @@ for ii=1:numStimuli
     if mod(ii,2) == 1
         newS(ii,:) = S(floor(ii/2)+1,:);
     elseif mod(ii,2) == 0
-        newS(ii,:) = S(ii/2,:); %255-S(ii/2,:)
+        newS(ii,:) = 255-S(ii/2,:);
 %         temp = reshape(S(ii/2,:),[N,N]);
 %         temp2 = reshape(255-S(ii/2,:),[N,N]);
 %         figure();imagesc(temp);
@@ -153,6 +157,7 @@ end
 %newS = newS-Grey;
 clear S;
 
+strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
 % GLM to check for visual responsiveness
@@ -258,58 +263,57 @@ strobeData = tsevs{1,strobeStart};
 % end
 
 % CREATE LAPLACIAN MATRIX
-L = zeros(effectivePixels,effectivePixels,'single');
+L = zeros(DIM(1)*DIM(2),DIM(1)*DIM(2),'single');
 
 %operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
-for jj=1:N
-    for ii=1:N
-        tempMat = zeros(N,N);
+for jj=1:DIM(1)
+    for ii=1:DIM(2)
+        tempMat = zeros(DIM(2),DIM(1));
         tempMat(ii,jj) = 4;
         if ii > 1
             tempMat(ii-1,jj) = -1;
         end
-        if ii < N
+        if ii < DIM(2)
             tempMat(ii+1,jj) = -1;
         end
         if jj > 1
             tempMat(ii,jj-1) = -1;
         end
-        if jj < N
+        if jj < DIM(1)
             tempMat(ii,jj+1) = -1;
         end
         L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
     end
 end
 
-
 stimLen = 0.07;
 
-totalTime = strobeData(end)+2;
+nonEmptyAD = ~cellfun(@isempty,allad);
+LFP_Movement = allad{nonEmptyAD};
+
+totalTime = length(LFP_Movement{1})./adfreq;
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-Response = zeros(numChans,nunits1,numStimuli);
-baseRate = zeros(numChans,nunits1);
-for ii=1:numChans
-    numNeurons = Neurons(ii,1);
-    for jj=1:numNeurons
-        stimStart = 0.05;%stimStartTimes(ii,jj+1);
-        baseRate(ii,jj+1) = length(allts{ii,jj+1})./totalTime;
-        %             display(baseRate(ii,jj));
-        %         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
-        for kk=1:numStimuli
-            stimOnset = strobeData(kk);
-            high = find(allts{ii,jj+1} > (stimOnset+stimStart));
-            low = find(allts{ii,jj+1} < (stimOnset+stimStart+stimLen));
-            temp = intersect(low,high);
-            
-            %Response(ii,jj+1,kk) = length(temp);
-            if mod(kk,2) == 1
-                Response(ii,jj+1,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1);%-1
-            elseif mod(kk,2) == 0
-                Response(ii,jj+1,kk) = -(length(temp)./stimLen)./baseRate(ii,jj+1); %+1
-            end
-            
-        end
+Response = zeros(totalUnits,numStimuli);
+baseRate = zeros(totalUnits,1);
+for ii=1:totalUnits
+    stimStart = 0.05;%stimStartTimes(ii,jj+1);
+    baseRate(ii) = length(allts{ii})./totalTime;
+    %             display(baseRate(ii,jj));
+    %         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
+    for kk=1:numStimuli
+        stimOnset = strobeData(kk);
+        high = find(allts{ii} > (stimOnset+stimStart));
+        low = find(allts{ii} < (stimOnset+stimStart+stimLen));
+        temp = intersect(low,high);
+        
+        Response(ii,kk) = length(temp);
+%         if mod(kk,2) == 1
+%             Response(ii,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1);%-1
+%         elseif mod(kk,2) == 0
+%             Response(ii,kk) = -(length(temp)./stimLen)./baseRate(ii,jj+1); %+1
+%         end
+        
     end
 end
 
@@ -319,19 +323,15 @@ horzDegrees = atand((screenPix_to_effPix*N*conv_factor/10)/DistToScreen);
 vertDegrees = atand((screenPix_to_effPix*N*conv_factor/10)/DistToScreen);
 xaxis = linspace(-horzDegrees/2,horzDegrees/2,N);
 yaxis = linspace(-vertDegrees/4,3*vertDegrees/4,N);
-maxNeurons = max(Neurons);
 
 bigLambda = [0,5e1,1e2,5e2,1e3,5e3,1e4,5e4,1e5,5e5,1e6,5e6,1e7];
-F = zeros(length(bigLambda),numChans,nunits1,effectivePixels);
+F = zeros(length(bigLambda),totalUnits,effectivePixels);
 
-RMS = zeros(length(bigLambda),numChans,nunits1);
+RMS = zeros(length(bigLambda),totalUnits);
 
-
-for ii=1:numChans
-    numNeurons = Neurons(ii,1);
-    for jj=1:numNeurons
+for ii=1:totalUnits
         
-        r = squeeze(Response(ii,jj+1,:));
+        r = squeeze(Response(ii,:));
         constraints = [r;zeros(effectivePixels,1)];
         %         [fhat,~,~] = glmfit(A,constraints,'normal','constant','off');
         %         [rhat,lBound,uBound] = glmval(fhat,S,'identity',stats,'confidence',1-alpha,'constant','off');
@@ -349,8 +349,8 @@ for ii=1:numChans
             A = [newS;bigLambda(lambda).*L];
             fhat = pinv(A)*constraints;
             
-            F(lambda,ii,jj+1,:) = fhat;
-            RMS(lambda,ii,jj+1) = (effectivePixels)^(-0.5)*norm(r-newS*fhat);
+            F(lambda,ii,:) = fhat;
+            RMS(lambda,ii) = (effectivePixels)^(-0.5)*norm(r-newS*fhat);
             
             %             subplot(numChans,maxNeurons,plotCount);
             %             imagesc(xaxis,yaxis,tempIFFT);set(gca,'YDir','normal');
@@ -359,40 +359,35 @@ for ii=1:numChans
             %             ylabel('Altitude(degrees of visual arc)');
             %             plotCount = plotCount+1;
         end
-    end
 end
 
 h(1) = figure();%h(2) = figure();
-bestMaps = zeros(numChans,nunits1);
-plotCount = 1;
-for ii=1:numChans
-    numNeurons = Neurons(ii,1);
-    for jj=1:numNeurons
-        tempRMS = squeeze(RMS(:,ii,jj+1))';
+bestMaps = zeros(totalUnits,1);
+numRows = floor(totalUnits/2);
+for ii=1:totalUnits
+        tempRMS = RMS(:,ii)';
         rmsDiff = diff(tempRMS);lambdaDiff = diff(bigLambda);
         deltaRMSdeltaLambda = rmsDiff./lambdaDiff;
         [maxVal,index] = max(abs(deltaRMSdeltaLambda));
         onepercent = 0.01*maxVal;
         firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
-        bestMaps(ii,jj+1) = index+firstBelow-1;
+        bestMaps(ii) = index+firstBelow-1;
         
         figure(h(1));
-        subplot(numChans,maxNeurons,plotCount);
-        imagesc(xaxis,yaxis,reshape(F(index+firstBelow,ii,jj+1,:),[N,N]));set(gca,'YDir','normal');
-        title(sprintf('Unbiased RF Chan %d, Neuron %d',ii,jj));
+        subplot(numRows,2,ii);
+        imagesc(xaxis,yaxis,reshape(F(index+firstBelow,ii,:),[N,N]));set(gca,'YDir','normal');
+        title(sprintf('Unbiased RF Unit %d',ii));
         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
         
 %         figure(h(2));
 %         subplot(numChans,maxNeurons,plotCount)
 %         plot(log10(bigLambda),squeeze(RMS(:,ii,jj+1)));
         
-        plotCount = plotCount+1;
-    end
 end
 
 FileName = strcat('NoiseResults',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 save(FileName,'F','newS','Response','allts','bigLambda','numChans','nunits1',...
-    'Neurons','beta','spaceExp','N','RMS','bestMaps');
+    'beta','spaceExp','N','RMS','bestMaps','totalUnits');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
