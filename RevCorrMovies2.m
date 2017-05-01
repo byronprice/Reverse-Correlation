@@ -1,4 +1,4 @@
-function [] = RevCorrMovies(AnimalName,Date,NoiseType)
+function [] = RevCorrMovies2(AnimalName,Date,NoiseType)
 %RevCorrMovies.m
 %   %   Analysis of single unit recording data in response to a white
 %   or pink noise movie (see Noise_Movie.m for Psychtoolbox
@@ -24,9 +24,9 @@ function [] = RevCorrMovies(AnimalName,Date,NoiseType)
 
 %OUTPUT: saves a file with the spatiotemporal receptive field estimate   
 %    
-% Created: 2016/04/27, 24 Cummington, Boston
+% Created: 2016/04/29, Commuter Rail Boston to Providence
 %  Byron Price
-% Updated: 2017/04/27
+% Updated: 2017/04/29
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino');
@@ -56,8 +56,7 @@ S_f = single((U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2));
 
 S_f(S_f==inf) = 1;
 
-tempFFT = fftn(S);
-newS = ifftn(tempFFT./S_f);
+newS = real(ifftn(fftn(S)./S_f));
 
 newS = single(reshape(newS,[DIM(1)*DIM(2),numStimuli]))';
 
@@ -124,27 +123,25 @@ for ii=1:totalUnits
     end
 end
 
-stimLen = 0.02;
-lagTimes = 0.02:0.02:0.2;
-numLags = length(lagTimes);
-Response = cell(totalUnits,numLags);
+kernelLen = 0.25;
+stimLen = 0.03;
+
+Response = cell(totalUnits,2);
 for ii=1:totalUnits
-    for jj=1:numLags
-        lag = lagTimes(jj);
-        firstStim = strobeData(1);
-        lastStim = strobeData(end);
+        firstStim = strobeData(1)+kernelLen;
+        lastStim = strobeData(end)+kernelLen;
         
         totalStims = round((lastStim-firstStim)/stimLen);
-        stimOnsets = linspace(firstStim,lastStim,totalStims);
-        Response{ii,jj} = zeros(totalStims,2,'single');
+        stimOffsets = linspace(firstStim,lastStim,totalStims);
+        Response{ii,1} = zeros(totalStims,1,'single');
         for kk=1:totalStims
-            stimOnset = stimOnsets(kk);
-            temp = sum(pointProcessSpikes(round((stimOnset+lag-stimLen/2)*1000):round((stimOnset+lag+stimLen/2)*1000),ii));
+            stimOffset = stimOffsets(kk);
+            temp = sum(pointProcessSpikes(round((stimOffset)*1000):round((stimOffset+stimLen)*1000),ii));
             
-            Response{ii,jj}(kk,1) = temp;
-            Response{ii,jj}(kk,2) = pointProcessStimTimes(round(stimOnset*1000));
+            Response{ii,1}(kk,1) = temp;
+            Response{ii,2}(kk,2) = pointProcessStimTimes(round((stimOffset-kernelLen)*1000):...
+                round((stimOffset)*1000));
         end
-    end
 end
 
 clear pointProcessStimTimes pointProcessSpikes totalMillisecs strobeData;

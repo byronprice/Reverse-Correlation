@@ -70,17 +70,9 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
 conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
-% inds = zeros(vertPix,horzPix);
-% 
-% count = 1;
-% for jj=1:horzPix
-%     for ii=1:vertPix
-%         inds(ii,jj) = count;
-%         count = count+1;
-%     end
-% end
-% 
-% newInds = kron(inds,ones(screenPix_to_effPix));
+vDiff = w_pixels-vertPix;
+
+destRect = [0 round(vDiff/2) h_pixels-1 round(w_pixels-vDiff/2)];
 
 Priority(9);
 % Retrieve monitor refresh duration
@@ -93,13 +85,14 @@ usb.startRecording;
 Screen('Flip', win);
 WaitSecs(30);
 tt = 1;
-while tt <= 5000
-    Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
+while tt <= numStimuli
+%     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
     % Img = S(:,:,tt);Img = Img(newInds);
     % Convert it to a texture 'tex':
-    tex = Screen('MakeTexture',win,Img);
-    Screen('DrawTexture',win, tex);
-    vbl = Screen('Flip',win);usb.strobe;
+    tex = Screen('MakeTexture',win,S(:,:,tt));
+    Screen('DrawTexture',win, tex,[],destRect,[],1); % 0 is nearest neighbor
+                                        % 1 is bilinear filter
+    vbl = Screen('Flip',win,flipInterval);usb.strobe;
     Screen('Close',tex);
     tt = tt+1;
 end
