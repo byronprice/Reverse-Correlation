@@ -70,29 +70,31 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
 conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
-vDiff = w_pixels-vertPix;
-
-destRect = [0 round(vDiff/2) h_pixels-1 round(w_pixels-vDiff/2)];
+wLow = round((w_pixels-maxPix)/2);
+wHigh = round(w_pixels-wLow);
+hLow = round((h_pixels-minPix)/2);
+hHigh = round(h_pixels-hLow);
+destRect = [wLow hLow wHigh hHigh];
 
 Priority(9);
 % Retrieve monitor refresh duration
-ifi = Screen('GetFlipInterval', win);deltaIFI = 2*ifi/3;
+ifi = Screen('GetFlipInterval', win);deltaIFI = ifi/2;
 % flipIntervals = flipInterval+exprnd(0.1,[numStimuli,1]);
 % WaitTimes = WaitTime+exprnd(0.25,[numStimuli,1]);
 flipInterval = 1/movie_FrameRate-deltaIFI;
 
 usb.startRecording;
-Screen('Flip', win);
 WaitSecs(30);
 tt = 1;
+vbl = Screen('Flip', win);
 while tt <= numStimuli
 %     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
     % Img = S(:,:,tt);Img = Img(newInds);
     % Convert it to a texture 'tex':
     tex = Screen('MakeTexture',win,S(:,:,tt));
-    Screen('DrawTexture',win, tex,[],destRect,[],1); % 0 is nearest neighbor
+    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
                                         % 1 is bilinear filter
-    vbl = Screen('Flip',win,flipInterval);usb.strobe;
+    vbl = Screen('Flip',win,vbl+flipInterval);usb.strobe;
     Screen('Close',tex);
     tt = tt+1;
 end
@@ -109,7 +111,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','movie_FrameRate','movieTime_Seconds',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
-    'conv_factor','beta','movieNum');
+    'conv_factor','beta','movieNum','destRect');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
