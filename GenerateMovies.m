@@ -1,7 +1,8 @@
 % GenerateMovies.m
 beta = -3;spaceExp = 2;timeExp = 2;
 movie_FrameRate = 60; % hz
-numStimuli = 30*movie_FrameRate;
+movieTime_Seconds = 10*60;
+numStimuli = movieTime_Seconds*movie_FrameRate;
 maxPix = 2350;
 minPix = 1425;
 mmPerPixel = 0.2363;
@@ -53,10 +54,12 @@ S = S(:,:,1:numStimuli);
 unbiasedS = unbiasedS(:,:,1:numStimuli);
 
 fileName = sprintf('15Min_PinkNoiseMovie%d.mat',jj);
-save(fileName,'S','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate');
+save(fileName,'S','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
+    'mmPerPixel','numStimuli','movieTime_Seconds','DIM');
 
 fileName = sprintf('15Min_UnbiasedPinkNoiseMovie%d.mat',jj);
-save(fileName,'unbiasedS','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate');
+save(fileName,'unbiasedS','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
+    'movieTime_Seconds','mmPerPixel','DIM');
 
 % from Dong 2001 ... Spatiotemporal Inseparability of Natural Images and
 %   Visual Sensitivities
