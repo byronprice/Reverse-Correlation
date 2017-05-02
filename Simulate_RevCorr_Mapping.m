@@ -43,7 +43,7 @@ gaborFun = @(x,y,t,xc,yc,sigma,k,n,gama,spatFreq,v,theta,phi) ...
     .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
 
 x = linspace(-15,15,N);y = linspace(-15,15,N);
-t = 150:-1000/60:0;
+t = 150:-1000/50:0;
 [x,y,t] = meshgrid(x,y,t);
 gabor = gaborFun(x,y,t,0,0,3,0.4,20,1,0.05,0,60*pi/180,0);
 gaborEnergy = sum(sum(sum(gabor.*gabor)));
@@ -57,14 +57,14 @@ for ii=timePoints:numStimuli
     Vid = single(S(:,:,ii-(timePoints-1):ii));
     filteredVid = Vid.*gabor;
     gaborOutput = sum(filteredVid(:)).*gaborEnergy;
-    lambda = exp(20*gaborOutput);
+    lambda = exp(25*gaborOutput);
     r(ii-(timePoints-1)) = poissrnd(lambda);
     filterOutput(ii-(timePoints-1)) = gaborOutput;
     temp = single(unbiasedS(:,:,ii-(timePoints-1):ii));
-    newS(ii-(timePoints-1),:) = temp(:)';
+    newS(ii-(timePoints-1),:) = temp(:);
 end
 clear unbiasedS S;
-L = sparse([],[],[],N*N*timePoints,N*N*timePoints,0);
+L = zeros(N*N*timePoints,N*N*timePoints,'single');
 
 %operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
@@ -96,22 +96,30 @@ for kk=1:timePoints
     end
 end
 
-bigLambda = logspace(0,7,10);
+bigLambda = logspace(1,4,10);
 RMS = zeros(length(bigLambda),1);
+tempF = zeros(length(bigLambda),N*N*timePoints);
 for ii=1:length(bigLambda)
     A = [newS(1:train,:);bigLambda(ii).*L];
     constraints = [r(1:train);zeros(N*N*timePoints,1)];
-    fhat = pinv(A)*constraints;
+    fhat = pinv(double(A))*double(constraints);
+    tempF(ii,:) = fhat;
     RMS(ii) = norm(r(train+1:end)-newS(train+1:end,:)*fhat)./sqrt(N*N*timePoints);
+    display(ii);
 end
 [~,bestMap] = min(RMS);
 
-constraints = [r;zeros(N*N*timePoints,1)];
-A = [newS;bigLambda(bestMap).*L];
+constraints = [double(r);zeros(N*N*timePoints,1)];
+A = [double(newS);double(bigLambda(bestMap).*L)];
 fhat = pinv(A)*constraints;
+
+%fhat = tempF(bestMap,:);
 
 fhat = reshape(fhat,[N,N,timePoints]);
 minVal = min(fhat(:));maxVal = max(fhat(:));
+min2 = min(gabor(:));max2 = max(gabor(:));
 for ii=1:timePoints
-   imagesc(fhat(:,:,ii));caxis([minVal maxVal]);pause(0.5);
+   subplot(1,2,1);imagesc(fhat(:,:,ii));caxis([minVal maxVal]);
+   subplot(1,2,2);imagesc(gabor(:,:,ii));caxis([min2 max2]);
+   pause(0.5);
 end
