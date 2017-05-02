@@ -98,12 +98,16 @@ if isempty(allad{49}) == 0
     
     if mod(difference,2) == 0
         addOn = difference/2;
-        movement = [zeros(addOn,1);movement;zeros(addOn,1)];
+        movement = [zeros(addOn-1,1);movement;zeros(addOn+1,1)];
     else
         addOn = floor(difference/2);
         movement = [zeros(addOn,1);movement;zeros(addOn+1,1)];
     end
-
+    tempMov = conv(abs(movement),ones(adfreq/2,1),'same');
+    tempMov = tempMov-mean(tempMov);
+    stdEst = 1.4826*mad(tempMov,1);
+    movement = single(tempMov>(3*stdEst));
+    clear tempMov stdEst;
 end
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
@@ -162,9 +166,9 @@ for kk=1:totalStims
    end
 end
 
-clear pointProcessStimTimes pointProcessSpikes totalMillisecs strobeData ...
+clear pointProcessStimTimes pointProcessSpikes totalMillisecs ...
     nunits1 spikeTimes numChans inds strobeData stimOffsets ...
-    stimTimes movie temp;
+    stimTimes movie temp tsevs;
 
 
 % CREATE LAPLACIAN MATRIX
@@ -230,7 +234,7 @@ for ii=1:totalUnits
         tempKernel = reshape(squeeze(tempF(lambda,:,:)),[1,DIM(1)*DIM(2)*kernelLenFull])';
         RMS(lambda) = norm(r(train+1:end)-tempMovie*tempKernel./kernelLenFull)./sqrt(DIM(1)*DIM(2)*kernelLenFull);
     end
-    bestMap = min(RMS);
+    [~,bestMap] = min(RMS);
     F(ii,:,:) = tempF(bestMap,:,:);
 end
 
@@ -250,4 +254,5 @@ save(FileName,'F','unbiasedS','Response','allts','bigLambda',...
     'beta','totalUnits','spikeCountLen','xaxis','yaxis','taxis','kernelLen','kernelShift',...
     'DIM','kernelLenFull','kernelSteps','LFP','movement');
 
+cd('~/Documents/Current-Projects/Reverse-Correlation');
 end
