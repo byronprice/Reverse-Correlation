@@ -92,7 +92,6 @@ end
 totalTime = length(LFP{1})./adfreq;
 
 if isempty(allad{49}) == 0
-<<<<<<< HEAD
     movement = allad{49};
 
     difference = length(LFP{1})-length(movement);
@@ -256,3 +255,5 @@ save(FileName,'F','unbiasedS','Response','allts','bigLambda',...
    'DIM','kernelLenFull','kernelSteps','LFP','movement');
 
 cd('~/Documents/Current-Projects/Reverse-Correlation');
+
+end
