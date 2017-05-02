@@ -1,8 +1,7 @@
 % SIMULATE DATA and test algorithm
-numStimuli = 5000;train = round(numStimuli*0.8);
-N = 40;
-
-DIM = [N,N,numStimuli];beta = -3.3;
+numStimuli = 10000;train = round(numStimuli*0.7);
+N = 30;
+DIM = [N,N,numStimuli];beta = -3;
 
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
 v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
@@ -14,8 +13,7 @@ S_f(S_f==inf) = 0;
 % S_f = S_f.^0.5;
 phi = rand([DIM(2),DIM(1),DIM(3)*2],'single');
 tempFFT = S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi));
-X = ifftn(tempFFT);
-X = real(X);
+X = real(ifftn(tempFFT));
 
 % get unbiased movie
 S_f(S_f==0) = 1;
@@ -44,34 +42,36 @@ gaborFun = @(x,y,t,xc,yc,sigma,k,n,gama,spatFreq,v,theta,phi) ...
     .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc)+v.*t)+phi)...
     .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
 
-x = linspace(-20,20,N);y = linspace(-20,20,N);
-t = linspace(200,0,1000/60);
+x = linspace(-15,15,N);y = linspace(-15,15,N);
+t = 150:-1000/60:0;
 [x,y,t] = meshgrid(x,y,t);
 gabor = gaborFun(x,y,t,0,0,3,0.4,20,1,0.05,0,60*pi/180,0);
 gaborEnergy = sum(sum(sum(gabor.*gabor)));
 
-r = zeros(numStimuli-15,1);
-filterOutput = zeros(numStimuli-15,1);
-newS = zeros(numStimuli-15,N*N*16);
-parfor ii=16:numStimuli
-    Vid = single(S(:,:,ii-15:ii));
+timePoints = size(t,3);
+
+r = zeros(numStimuli-(timePoints-1),1);
+filterOutput = zeros(numStimuli-(timePoints-1),1);
+newS = zeros(numStimuli-(timePoints-1),N*N*timePoints,'single');
+for ii=timePoints:numStimuli
+    Vid = single(S(:,:,ii-(timePoints-1):ii));
     filteredVid = Vid.*gabor;
-    gaborOutput = sum(filteredVid(:));
-    lambda = exp(gaborOutput.*gaborEnergy);
-    r(ii-15) = poissrnd(lambda);
-    filterOutput(ii-15) = gaborOutput;
-    temp = single(unbiasedS(:,:,ii-15:ii));
-    newS(ii-15,:) = temp(:);
+    gaborOutput = sum(filteredVid(:)).*gaborEnergy;
+    lambda = exp(20*gaborOutput);
+    r(ii-(timePoints-1)) = poissrnd(lambda);
+    filterOutput(ii-(timePoints-1)) = gaborOutput;
+    temp = single(unbiasedS(:,:,ii-(timePoints-1):ii));
+    newS(ii-(timePoints-1),:) = temp(:)';
 end
 clear unbiasedS S;
-L = zeros(N*N*16,N*N*16,'single');
+L = sparse([],[],[],N*N*timePoints,N*N*timePoints,0);
 
 %operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
-for kk=1:16
+for kk=1:timePoints
     for jj=1:N
         for ii=1:N
-            tempMat = zeros(N,N,16);
+            tempMat = zeros(N,N,timePoints);
             tempMat(ii,jj,kk) = 6;
             if ii > 1
                 tempMat(ii-1,jj,kk) = -1;
@@ -88,7 +88,7 @@ for kk=1:16
             if kk > 1
                 tempMat(ii,jj,kk-1) = -1;
             end
-            if kk < 16
+            if kk < timePoints
                 tempMat(ii,jj,kk+1) = -1;
             end
             L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
@@ -96,53 +96,22 @@ for kk=1:16
     end
 end
 
-% numBasis = N*N/4;
-% xCen = linspace(-20,20,N/2);
-% yCen = linspace(-20,20,N/2);
-% 
-% normalDeviance = zeros(8,1);
-% poissonDeviance = zeros(8,1);
-% bigCount = 1;
-% for basisStd = [0.5,1,2,5,10,50]
-%     basisFuns = zeros(N*N,numBasis);
-%     count = 1;
-%     for ii=1:length(xCen)
-%         for jj=1:length(yCen)
-%             gauss = gaussFilter(x,y,xCen(ii),yCen(jj),basisStd);
-%             basisFuns(:,count) = gauss(:)./sum(gauss(:));
-%             count = count+1;
-%         end
-%     end
-%     
-%     Design = newS*basisFuns;
-%     [b,dev,stats] = glmfit(Design,r,'poisson','link','identity');
-%     poissonDeviance(bigCount) = dev;
-%     yhat = glmval(b,basisFuns,'identity');
-%     figure();imagesc(reshape(yhat,[N,N]));title(sprintf('Poisson GLM: STD %3.1f',basisStd));
-%     [b2,dev2,stats2] = glmfit(Design,r,'normal');
-%     normalDeviance(bigCount) = dev2;bigCount = bigCount+1;
-%     yhat = glmval(b2,basisFuns,'identity');
-%     figure();imagesc(reshape(yhat,[N,N]));
-%     title(sprintf('Normal GLM: STD %3.1f',basisStd));
-% end
-% figure();subplot(2,1,1);plot(normalDeviance);subplot(2,1,2);plot(poissonDeviance);
-
-bigLambda = logspace(0,5,10);
+bigLambda = logspace(0,7,10);
 RMS = zeros(length(bigLambda),1);
 for ii=1:length(bigLambda)
     A = [newS(1:train,:);bigLambda(ii).*L];
-    constraints = [r(1:train);zeros(N*N*16,1)];
+    constraints = [r(1:train);zeros(N*N*timePoints,1)];
     fhat = pinv(A)*constraints;
-    RMS(ii) = norm(r(train+1:end)-newS(train+1:end,:)*fhat)./sqrt(N*N*16);
+    RMS(ii) = norm(r(train+1:end)-newS(train+1:end,:)*fhat)./sqrt(N*N*timePoints);
 end
 [~,bestMap] = min(RMS);
 
-constraints = [r;zeros(N*N*16,1)];
+constraints = [r;zeros(N*N*timePoints,1)];
 A = [newS;bigLambda(bestMap).*L];
 fhat = pinv(A)*constraints;
 
-fhat = reshape(fhat,[N,N,16]);
+fhat = reshape(fhat,[N,N,timePoints]);
 minVal = min(fhat(:));maxVal = max(fhat(:));
-for ii=1:16
+for ii=1:timePoints
    imagesc(fhat(:,:,ii));caxis([minVal maxVal]);pause(0.5);
 end
