@@ -90,6 +90,7 @@ for ii=1:length(inds)
 end
 
 totalTime = length(LFP{1})./adfreq;
+timeStamps = 1/adfreq:1/adfreq:totalTime;
 
 if isempty(allad{49}) == 0
     movement = allad{49};
@@ -98,26 +99,29 @@ if isempty(allad{49}) == 0
     
     if mod(difference,2) == 0
         addOn = difference/2;
-        movement = [zeros(addOn,1);movement;zeros(addOn,1)];
+        movement = [zeros(addOn-1,1);movement;zeros(addOn+1,1)];
     else
         addOn = floor(difference/2);
         movement = [zeros(addOn,1);movement;zeros(addOn+1,1)];
     end
-
+    tempMov = conv(abs(movement),ones(adfreq/2,1),'same');
+    tempMov = tempMov-mean(tempMov);
+    stdEst = 1.4826*mad(tempMov,1);
+    movement = single(tempMov>(3*stdEst));
 end
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-totalMillisecs = round(totalTime*1000);
+totalMillisecs = length(timeStamps);
 
 stimTimes = round(strobeData.*1000);
-pointProcessStimTimes = zeros(totalMillisecs,1);
+pointProcessStimTimes = zeros(totalMillisecs,1,'single');
 
 for kk=1:numStimuli-1
     pointProcessStimTimes(stimTimes(kk):stimTimes(kk+1)-1) = kk;
 end
 pointProcessStimTimes(stimTimes(numStimuli):(stimTimes(numStimuli)+1000/movie_FrameRate)) = numStimuli;
 
-pointProcessSpikes = zeros(totalMillisecs,totalUnits);
+pointProcessSpikes = zeros(totalMillisecs,totalUnits,'single');
 
 for ii=1:totalUnits
     spikeTimes = round(allts{ii}.*1000);
