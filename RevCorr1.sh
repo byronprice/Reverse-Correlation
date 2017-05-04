@@ -5,8 +5,8 @@
 #$ -N RevCorr1
 #$ -j y
 #$ -o RevCorr1Outputs.txt
-#$ -l mem_total=94G
-
+#$ -l mem_per_core=16G
+#$ -pe omp 16
 
 module load matlab/2017a
 

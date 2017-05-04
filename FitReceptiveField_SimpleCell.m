@@ -310,7 +310,8 @@ gabor = gaborFun(X,Y,T,parameterVec(historyParams+1),parameterVec(historyParams+
 filterEnergy = sum(sum(sum(gabor.*gabor)));
 
 filterOutput = zeros(trainMillisecs,1);
-for kk=29000:trainMillisecs
+%stimLen = 29000:stimulusTime:trainMillisecs;
+parfor kk=30000:trainMillisecs
 %     onScreenStim = squeeze(newS(pointProcessStimTimes(zz(kk)),:,:));
 %     if mod(kk,stimulusTime) == 1
 %         filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
@@ -318,6 +319,9 @@ for kk=29000:trainMillisecs
     filterOutput(kk) = sum(sum(sum(unbiasedS(:,:,pointProcessStimTimes(kk-201:stimulusTime:kk))...
         .*gabor./filterEnergy)));
 end
+
+filterOutput(1:30000) = sum(sum(sum(unbiasedS(:,:,pointProcessStimTimes(1:stimulusTime:201))...
+        .*gabor./filterEnergy)));
 
 % for kk=1:numStimuli
 %    filterOutput = sum(newS(kk,:)'.*gaborFilter)./numPixels;

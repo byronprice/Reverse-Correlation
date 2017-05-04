@@ -51,12 +51,12 @@ DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
 v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
 t = [(0:floor(DIM(3)/2)) -(ceil(DIM(3)/2)-1:-1:1)]'/(DIM(3));
-[v,u,T] = meshgrid(v,u,t);
-S_f = single((U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2));
+[V,U,T] = meshgrid(v,u,t);
+S_f = (U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2);
 
 S_f(S_f==inf) = 1;
 
-unbiasedS = single(real(ifftn(fftn(S)./S_f)));
+unbiasedS = single(real(ifftn(fftn(double(S))./S_f)));
 unbiasedS = reshape(unbiasedS,[DIM(2)*DIM(1),numStimuli]);
 
 clear S S_f U V T u v t;
@@ -131,19 +131,21 @@ for ii=1:totalUnits
    end
 end
 
+kernelLen = 0.2;
+spikeCountLen = 0.02;
+kernelSteps = 0.02;
+kernelLenFull = kernelLen/kernelSteps+1;
+    
+totalStims = 10000;
+firstStim = strobeData(1)+kernelLen;
+lastStim = strobeData(end);
+
+stimOffsets = unifrnd(firstStim,lastStim,[totalStims,1]);
+
 if exist('movement','var')
-    kernelLen = 0.2;kernelShift = 0.015;
-    spikeCountLen = 0.02;
-    kernelSteps = 0.02;
-    kernelLenFull = kernelLen/kernelSteps+1;
     
     Response = cell(totalUnits,1);
     for ii=1:totalUnits
-        firstStim = strobeData(1)+kernelLen;
-        lastStim = strobeData(end);
-        
-        totalStims = round((lastStim-firstStim)/kernelShift);
-        stimOffsets = linspace(firstStim,lastStim,totalStims);
         Response{ii,1} = zeros(totalStims,2,'single');
         for kk=1:totalStims
             stimOffset = stimOffsets(kk);
@@ -155,18 +157,9 @@ if exist('movement','var')
     end
     
 else
-    kernelLen = 0.2;kernelShift = 0.015;
-    spikeCountLen = 0.02;
-    kernelSteps = 0.02;
-    kernelLenFull = kernelLen/kernelSteps+1;
     
     Response = cell(totalUnits,1);
     for ii=1:totalUnits
-        firstStim = strobeData(1)+kernelLen;
-        lastStim = strobeData(end);
-        
-        totalStims = round((lastStim-firstStim)/kernelShift);
-        stimOffsets = linspace(firstStim,lastStim,totalStims);
         Response{ii,1} = zeros(totalStims,2,'single');
         for kk=1:totalStims
             stimOffset = stimOffsets(kk);
@@ -175,14 +168,7 @@ else
             Response{ii,1}(kk,2) = 1;
         end
     end
-
 end
-
-firstStim = strobeData(1)+kernelLen;
-lastStim = strobeData(end);
-
-totalStims = round((lastStim-firstStim)/kernelShift);
-stimOffsets = linspace(firstStim,lastStim,totalStims);
 
 onScreenInds = zeros(sum(Response{1}(:,2)),kernelLenFull,'single');
 count = 1;
@@ -206,7 +192,7 @@ save(fileName,'unbiasedS','Response','allts','totalUnits',...
     'kernelShift','totalMillisecs','beta','kernelSteps','movie_FrameRate');
 
 clearvars -except unbiasedS onScreenInds Response DIM kernelLenFull screenPix_to_effPix ...
-    DistToScreen totalStims conv_factor kernelLen totalUnits;
+    DistToScreen totalStims conv_factor kernelLen totalUnits AnimalName Date NoiseType;
 
 
 % CREATE LAPLACIAN MATRIX
@@ -216,20 +202,20 @@ L = zeros(DIM(1)*DIM(2)*kernelLenFull,DIM(1)*DIM(2)*kernelLenFull,'single');
 %2D operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
 for kk=1:kernelLenFull
-    for jj=1:DIM(1)
-        for ii=1:DIM(2)
-            tempMat = zeros(DIM(2),DIM(1),kernelLenFull);
+    for jj=1:DIM(2)
+        for ii=1:DIM(1)
+            tempMat = zeros(DIM(1),DIM(2),kernelLenFull);
             tempMat(ii,jj,kk) = 6;
             if ii > 1
                 tempMat(ii-1,jj,kk) = -1;
             end
-            if ii < DIM(2)
+            if ii < DIM(1)
                 tempMat(ii+1,jj,kk) = -1;
             end
             if jj > 1
                 tempMat(ii,jj-1,kk) = -1;
             end
-            if jj < DIM(1)
+            if jj < DIM(2)
                 tempMat(ii,jj+1,kk) = -1;
             end
             if kk > 1
@@ -254,7 +240,7 @@ train = round(totalStims*0.7);
 for ii=1:totalUnits
     fprintf('Running unit: %d\n',ii);
     r = squeeze(Response{ii}(Response{ii}(:,2)==1,1));
-    constraints = [r(1:train);zeros(DIM(1)*DIM(2)*kernelLenFull,1,'single')];
+    constraints = [r(1:train);zeros(DIM(1)*DIM(2)*kernelLenFull,1)];
     
     tempF = zeros(length(bigLambda),kernelLenFull*DIM(1)*DIM(2));
     RMS =  zeros(length(bigLambda),1);
@@ -269,10 +255,11 @@ for ii=1:totalUnits
     clear tempInds tempMov;
     
     for lambda = 1:length(bigLambda)
-            % VERTICALLY CONCATENATE S and L
-            % onScreenMovie is size numStimuli X effectivePixels
+        % VERTICALLY CONCATENATE S and L
+        % onScreenMovie is size numStimuli X effectivePixels
         tempF(lambda,:) = pinv(double([A;bigLambda(lambda).*L]))*constraints;  
     end
+    clear A;
         
     inds = onScreenInds(train+1:totalStims,:);
     A = zeros(length(inds),DIM(1)*DIM(2)*kernelLenFull);
@@ -302,7 +289,6 @@ xaxis = linspace(-horzDegrees/2,horzDegrees/2,DIM(1));
 yaxis = linspace(-vertDegrees/4,3*vertDegrees/4,DIM(2));
 taxis = linspace(-kernelLen*1000,0,kernelLenFull);
 
-
 % for ii=1:totalUnits
 %     h(ii) = figure();
 %     for jj=1:kernelLenFull
@@ -320,5 +306,4 @@ save(fileName,'F','Response','bigLambda','totalUnits','spikeCountLen',...
     'screenPix_to_effPix','kernelLen','runTime');
 
 %cd('~/Documents/Current-Projects/Reverse-Correlation');
-
 end

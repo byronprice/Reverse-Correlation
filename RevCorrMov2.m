@@ -56,7 +56,7 @@ S_f = single((U.^spaceExp+V.^spaceExp+T.^timeExp).^(beta/2));
 
 S_f(S_f==inf) = 1;
 
-unbiasedS = real(ifftn(fftn(S)./S_f));
+unbiasedS = real(ifftn(fftn(double(S))./S_f));
 
 unbiasedS = reshape(unbiasedS,[DIM(2)*DIM(1),numStimuli]);
 
@@ -131,22 +131,23 @@ for ii=1:totalUnits
       pointProcessSpikes(spikeTimes(jj),ii) = 1;
    end
 end
+numStimuli = 10000;
+kernelLen = 0.2;
+spikeCountLen = 0.02;
+kernelSteps = 0.01;
+kernelLenFull = kernelLen/kernelSteps+1;
+
+firstStim = strobeData(1)+kernelLen;
+lastStim = strobeData(end);
+
+stimOffsets = unifrnd(firstStim,lastStim,[numStimuli,1]);
 
 if exist('movement','var')
-    kernelLen = 0.2;
-    spikeCountLen = 0.02;
-    kernelSteps = 0.01;
-    kernelLenFull = kernelLen/kernelSteps+1;
-    
-    firstStim = strobeData(1)+kernelLen;
-    lastStim = strobeData(end);
-    
-    stimOffsets = unifrnd(firstStim,lastStim,[numStimuli*2,1]);
     
     Response = cell(totalUnits,1);
     for ii=1:totalUnits
-        Response{ii,1} = zeros(numStimuli*2,2,'single');
-        for kk=1:numStimuli*2
+        Response{ii,1} = zeros(numStimuli,2,'single');
+        for kk=1:numStimuli
             stimOffset = stimOffsets(kk);
             Response{ii,1}(kk,1) = sum(pointProcessSpikes(round(stimOffset*1000):...
                 round((stimOffset+spikeCountLen)*1000),ii));
@@ -156,21 +157,11 @@ if exist('movement','var')
     end
     
 else
-    kernelLen = 0.2;
-    spikeCountLen = 0.02;
-    kernelSteps = 0.01;
-    kernelLenFull = kernelLen/kernelSteps+1;
-    
-    firstStim = strobeData(1)+kernelLen;
-    lastStim = strobeData(end);
-    
-    stimOffsets = unifrnd(firstStim,lastStim,[numStimuli*2,1]);
-    
     Response = cell(totalUnits,1);
     for ii=1:totalUnits
         
-        Response{ii,1} = zeros(numStimuli*2,2,'single');
-        for kk=1:numStimuli*2
+        Response{ii,1} = zeros(numStimuli,2,'single');
+        for kk=1:numStimuli
             stimOffset = stimOffsets(kk);
             Response{ii,1}(kk,1) = sum(pointProcessSpikes(round(stimOffset*1000):...
                 round((stimOffset+spikeCountLen)*1000),ii));
@@ -181,7 +172,7 @@ end
 
 onScreenInds = zeros(sum(Response{1}(:,2)),kernelLenFull,'single');
 count = 1;
-for kk=1:numStimuli*2
+for kk=1:numStimuli
     if Response{1}(kk,2) == 1
         stimOffset = stimOffsets(kk);
         temp = pointProcessStimTimes(round((stimOffset-kernelLen)*1000):...
@@ -210,20 +201,20 @@ L = zeros(DIM(1)*DIM(2),DIM(1)*DIM(2),'single');
 
 %2D operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
-for jj=1:DIM(1)
-    for ii=1:DIM(2)
-        tempMat = zeros(DIM(2),DIM(1));
+for jj=1:DIM(2)
+    for ii=1:DIM(1)
+        tempMat = zeros(DIM(1),DIM(2));
         tempMat(ii,jj) = 4;
         if ii > 1
             tempMat(ii-1,jj) = -1;
         end
-        if ii < DIM(2)
+        if ii < DIM(1)
             tempMat(ii+1,jj) = -1;
         end
         if jj > 1
             tempMat(ii,jj-1) = -1;
         end
-        if jj < DIM(1)
+        if jj < DIM(2)
             tempMat(ii,jj+1) = -1;
         end
         L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
@@ -235,13 +226,13 @@ clear tempMat ii jj kk;
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
 
-bigLambda = logspace(1,5,10);
+bigLambda = logspace(0,5,20);
 F = zeros(totalUnits,kernelLenFull,DIM(1)*DIM(2));
 train = round(totalStims*0.7);
 for ii=1:totalUnits
     fprintf('Running unit: %d\n',ii);
     r = squeeze(Response{ii}(Response{ii}(:,2)==1,1));
-    constraints = [r(1:train);zeros(DIM(1)*DIM(2),1,'single')];
+    constraints = [r(1:train);zeros(DIM(1)*DIM(2),1)];
     
     tempF = zeros(length(bigLambda),kernelLenFull,DIM(1)*DIM(2));
     RMS =  zeros(length(bigLambda),1);
@@ -260,7 +251,7 @@ for ii=1:totalUnits
             tempMov = unbiasedS(:,tempInds);
             A(ll,:) = tempMov(:);
         end
-        RMS(lambda) = norm(r(train+1:totalStims)-double(A)*double(fhat(:))./kernelLenFull)...
+        RMS(lambda) = norm(r(train+1:totalStims)-A*fhat(:)./kernelLenFull)...
                 ./sqrt(DIM(1)*DIM(2)*kernelLenFull);
         clear A tempMov tempInds;
     end
