@@ -1,189 +1,258 @@
-function [PosteriorSamples,PosteriorMean,PosteriorInterval] = FitReceptiveField_SimpleCell(AnimalName,Date,NoiseType)
+function [PosteriorSamples,PosteriorMean,PosteriorInterval,Likelihood] =...
+    FitReceptiveField_SimpleCell(AnimalName,Date,NoiseType)
 %FitReceptiveField_SimpleCell.m
 %  Use data from a receptive-field mapping experiment and fit a Gabor model
-%   to obtain the spatial receptive field for a simple cell in L4 of V1.
+%   to obtain the spatiotemporal receptive field for a simple cell in L4 of V1.
+%  MCMC
 
 % declare global variables
-global numPixels numStimuli totalMillisecs Y pointProcessStimTimes h ...
-    historyDesign newS numParameters historyParams gaborParams stimulusTime;
+global numStimuli totalMillisecs pointProcessStimTimes h ...
+    historyDesign unbiasedS numParameters historyParams ...
+    movement stimulusTime X Y T gaborFun nonLinFun spikeTrain ...
+    trainMillisecs;
 % read in the .plx file
 beta = 0;
 
-EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
+EphysFileName = strcat('NoiseMovieData',NoiseType,num2str(Date),'_',num2str(AnimalName),'-sort.mat');
 
 if exist(EphysFileName,'file') ~= 2
     readall(strcat(EphysFileName(1:end-4),'.plx'));pause(1);
 end
 
-StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
-load(EphysFileName,'nunits1','allts','svStrobed','tsevs')
+StimulusFileName = strcat('NoiseMovieStim',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
+load(EphysFileName,'nunits1','allts','adfreq','allad','svStrobed','tsevs')
 load(StimulusFileName)
 
+gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
+    exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
+    ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
+    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc)+v.*t)-phi)...
+    .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
 
-% generate theoretical stimulus power spectrum
-if length(effectivePixels) == 1
-    N = sqrt(effectivePixels);
-    DIM = [N,N];
-else
-   DIM = effectivePixels; 
-end
+%nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
+nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base)/slope)./(1+exp((x-base)/slope))-drop;
+%nonLinFun = @(x,slope,intercept) max(0,slope.*x+intercept);
+
+% horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
+% vertDegrees = atan((screenPix_to_effPix*DIM(2)*conv_factor/10)/DistToScreen);
+xaxis = linspace(-screenPix_to_effPix*DIM(2)/2,...
+    screenPix_to_effPix*DIM(2)/2,DIM(2));
+yaxis = linspace(-screenPix_to_effPix*DIM(1)/4,...
+    3*screenPix_to_effPix*DIM(1)/4,DIM(1));
+taxis = linspace(200,0,21);
+
+stimulusTime = 10;
+
+[X,Y,T] = meshgrid(xaxis,yaxis,taxis);
+
+% CREATE UNBIASED VERSION OF MOVIE BY DIVIDING OUT POWER SPECTRUM
+%  USED TO GENERATE THE MOVIE
+DIM = [effectivePixels(1),effectivePixels(2),numStimuli];
 
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
-% Reproduce these frequencies along ever row
-U = repmat(u,1,DIM(2)); 
-% v is the set of frequencies along the second dimension.  For a square
-% region it will be the transpose of u
-v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]/DIM(2);
-% Reproduce these frequencies along ever column
-V = repmat(v,DIM(1),1);
+v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
+tau = [(0:floor(DIM(3)/2)) -(ceil(DIM(3)/2)-1:-1:1)]'/(DIM(3));
+[V,U,TAU] = meshgrid(v,u,tau);
+S_f = (U.^spaceExp+V.^spaceExp+TAU.^timeExp).^(beta/2);
 
-% [U,V] = meshgrid(u,v); U = U'; V = V';
-% Generate the power spectrum
-S_f = (U.^2 + V.^2).^(beta/2);
+S_f(S_f==inf) = 1;
 
-% Set any infinities to zero
-S_f(S_f==inf) = 0;
+unbiasedS = real(ifftn(fftn(double(S))./S_f));
+bigTemp = zeros(DIM(1),DIM(2),DIM(3)+1);
+temp = ones(DIM(1),DIM(2)).*mean(unbiasedS(:));
+bigTemp(:,:,1) = temp;
+bigTemp(:,:,2:end) = unbiasedS;
 
-tempSf = S_f; tempSf(tempSf==0) = 1;
+unbiasedS = bigTemp;
 
-% correct power spectrum of the images to remove bias in RF estimate
-%  I control the image generation so we know the theoretical power spectrum
-parfor ii=1:numStimuli
-    tempS = reshape(S(ii,:),[DIM(1),DIM(2)]);
-    tempFFT = fft2(tempS);
-    correctedIm = ifft2(tempFFT./tempSf);
-    S(ii,:) = correctedIm(:);
-end
+clear S S_f U V TAU u v tau temp bigTemp;
 
+% REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
 totalUnits = sum(sum(temp));
 
-% tsevs are the strobed times of stimulus onset, then offset
-%  Onset at tsevs{1,33}(2), offset at tsevs{1,33}(3), onset at
-%  tsevs{1,33}(4), offset at 5, etc.
-
-%x = find(~cellfun(@isempty,tsevs));
-
 temp = cell(totalUnits,1);
 count = 1;
 for ii=1:numChans
-    for jj=1:nunits1
-        if isempty(allts{jj,Chans(ii)}) == 0
-            temp{count} = allts{jj,Chans(ii)};
-            count = count+1;
-        end
-    end
+   for jj=1:nunits1
+       if isempty(allts{jj,Chans(ii)}) == 0
+           temp{count} = allts{jj,Chans(ii)};
+           count = count+1;
+       end
+   end
 end
 allts = temp;
-
-% ASSUME THAT A RESPONSE TO A STIMULUS OFFSET IS THE SAME AS A RESPONSE TO
-%  THE NEGATIVE OF THAT IMAGE, image created with values from 0 to 255
-Grey = 127;
-numStimuli = numStimuli*2;
-numPixels = N*N;
-newS = zeros(numStimuli,numPixels,'single');
-for ii=1:numStimuli
-    if mod(ii,2) == 1
-        newS(ii,:) = S(floor(ii/2)+1,:);
-    elseif mod(ii,2) == 0
-        newS(ii,:) = 255-S(ii/2,:); %255-S(ii/2,:)
-    end
-end
-% newS = Grey-newS;
-clear S;
 
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-historyParams = 20;
-gaborParams = 8;
-numParameters = historyParams+gaborParams;
+
+% GATHER LFP AND MOVEMENT DATA
+nonEmptyAD = ~cellfun(@isempty,allad);
+inds = find(nonEmptyAD==1);
+LFP = cell(length(inds),1);
+for ii=1:length(inds)
+   LFP{ii} = allad{inds};
+end
+
+totalTime = length(LFP{1})./adfreq;
+
+if isempty(allad{49}) == 0
+    movement = allad{49};
+
+    difference = length(LFP{1})-length(movement);
+    
+    if mod(difference,2) == 0
+        addOn = difference/2;
+        movement = [zeros(addOn-1,1);movement;zeros(addOn+1,1)];
+    else
+        addOn = floor(difference/2);
+        movement = [zeros(addOn,1);movement;zeros(addOn+1,1)];
+    end
+    tempMov = conv(abs(movement),ones(adfreq/2,1),'same');
+    tempMov = tempMov-mean(tempMov);
+    stdEst = 1.4826*mad(tempMov,1);
+    movement = single(tempMov>(3*stdEst));
+    clear tempMov stdEst;
+else
+    movement = zeros(length(LFP{1}),1);
+end
+
+% COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
+totalMillisecs = round(totalTime*1000);
+
+trainMillisecs = round(totalMillisecs*0.7);
+% timeVec = 202:stimulusTime:trainMillisecs;
+% timeVecLen = length(timeVec);
+
+
+stimTimes = round(strobeData.*1000);
+pointProcessStimTimes = ones(totalMillisecs,1);
+
+for kk=1:numStimuli-1
+   pointProcessStimTimes(stimTimes(kk):stimTimes(kk+1)-1) = kk+1;
+end
+pointProcessStimTimes(stimTimes(numStimuli):(stimTimes(numStimuli)+1000/movie_FrameRate)) = numStimuli+1;
+
+pointProcessSpikes = zeros(totalMillisecs,totalUnits);
+
+for ii=1:totalUnits
+   spikeTimes = round(allts{ii}.*1000);
+   for jj=1:length(spikeTimes)
+      pointProcessSpikes(spikeTimes(jj),ii) = 1;
+   end
+end
+
+
+historyParams = 10;
+gaborParams = 11;
+nonLinParams = 2;
+numParameters = historyParams+gaborParams+nonLinParams+1;
 
 twopi = 2*pi;
 Bounds = zeros(numParameters,2);
-Bounds(1:historyParams,:) = ones(historyParams,2).*[-250,50];
-Bounds(historyParams+1,:) = [0,1]; % height of Gabor parameter
-Bounds(historyParams+2,:) = [min(xaxis)-5,max(xaxis)+5]; % x center
-Bounds(historyParams+3,:) = [min(yaxis)-5,max(yaxis)+5]; % y center
-Bounds(historyParams+4,:) = [0,20]; % standard deviation x
-Bounds(historyParams+5,:) = [0,20]; % standard deviation y
-Bounds(historyParams+6,:) = [0,10]; % spatial frequency
-Bounds(historyParams+7,:) = [0,twopi]; %  orientation theta
-Bounds(historyParams+8,:) = [0,twopi]; % phase shift phi
+Bounds(1:historyParams,1) = -200;
+Bounds(1:historyParams,2) = 20;
+Bounds(historyParams+1,:) = [0,10];% k time-filter parameter
+Bounds(historyParams+2,:) = [0,50]; % n time-filter parameter
+Bounds(historyParams+3,:) = [-100,100]; % v time-filter parameter
+Bounds(historyParams+4,:) = [0,twopi]; % A orientation of Gabor
+Bounds(historyParams+5,:) = [min(xaxis)-5,max(xaxis)+5]; % x center
+Bounds(historyParams+6,:) = [min(yaxis)-5,max(yaxis)+5]; % y center
+Bounds(historyParams+7,:) = [1e-4,500]; % standard deviation x
+Bounds(historyParams+8,:) = [1e-4,500]; % standard deviation y
+Bounds(historyParams+9,:) = [0,100]; % spatial frequency
+Bounds(historyParams+10,:) = [0,twopi]; %  orientation theta
+Bounds(historyParams+11,:) = [0,twopi]; % phase shift phi
+Bounds(historyParams+12,:) = [-200,200]; % sigmoid base
+Bounds(historyParams+13,:) = [-200,200]; % sigmoid slope
+Bounds(historyParams+14,:) = [-200,200]; % sigmoid rise
+Bounds(historyParams+15,:) = [-200,200]; % sigmoid drop
+Bounds(end,:) = [-200,20]; % parameter for movement modulation
 
-% convert timeStamps to point process
-totalTime = strobeData(end)+2;
-totalMillisecs = round(totalTime*1000);
+numIter = 5e5;burnIn = 1e5;skipRate = 50;
 
-stimTimes = round(strobeData.*1000);
-pointProcessStimTimes = zeros(totalMillisecs,1);
-stimOnset = 60;
-stimOffset = 120;
-stimulusTime = stimOffset-stimOnset+1;
-for kk=1:numStimuli
-    pointProcessStimTimes((stimTimes(kk)+stimOnset):(stimTimes(kk)+stimOffset)) = kk;
-end
-
+PosteriorSamples = zeros(totalUnits,numParameters,length(burnIn:skipRate:numIter));
+PosteriorMean = zeros(totalUnits,numParameters);
+PosteriorInterval = zeros(totalUnits,numParameters,2);
+Likelihood = zeros(totalUnits,length(burnIn:skipRate:numIter));
 for zz=1:totalUnits
         % ORGANIZE DATA
         
-        Y = zeros(totalMillisecs,1);
+        spikeTrain = pointProcessSpikes(:,zz);
         historyDesign = zeros(totalMillisecs,historyParams);
         
-        % convert spike times to point process
-        temp = round(allts{zz}.*1000);
-        for kk=1:length(temp)
-            Y(temp(kk)) = 1;
-        end
         
         % get history dependence (past 25ms)
         historyDesign(:,1) = ones(totalMillisecs,1,'single');
-%         for kk=2:historyParams
-%             temp = Y;shift = zeros(kk-1,1);
-%             history = [shift;temp];
-%             historyDesign(:,kk) = history(1:(end-(kk-1)));
-%         end
+        for kk=2:historyParams
+            temp = spikeTrain;shift = zeros(kk-1,1);
+            history = [shift;temp];
+            historyDesign(:,kk) = history(1:(end-(kk-1)));
+        end
         
         
         % RUN MCMC
         h = ones(numParameters,1)./1000;
-        % repeat gradient ascent from a number of different starting
-        %  positions
+
         numIter = 5e5;burnIn = 1e5;
         parameterVec = zeros(numParameters,numIter);
         
-        parameterVec(1,1) = normrnd(-50,50);
-        for ii=2:historyParams
-            parameterVec(ii,1) = normrnd(0,10);
-        end
-        for ii=1:gaborParams
-            parameterVec(historyParams+ii,1) = unifrnd(Bounds(historyParams+ii,1),Bounds(historyParams+ii,2));
+        for ii=1:historyParams
+            parameterVec(ii,1) = normrnd(0,1);
         end
         
-        parameterVec(:,1) = max(Bounds(1:numParameters,1),min(parameterVec(:,1),Bounds(1:numParameters,2)));
+        parameterVec(historyParams+1,1) = normrnd(0.5,0.1);
+        parameterVec(historyParams+2,1) = normrnd(15,5);
+        parameterVec(historyParams+3,1) = normrnd(0,0.1);
+        parameterVec(historyParams+4,1) = normrnd(pi,pi/4);
+        parameterVec(historyParams+5,1) = normrnd(max(xaxis)/2,300);
+        parameterVec(historyParams+6,1) = normrnd(max(yaxis)/2,200);
+        parameterVec(historyParams+7,1) = normrnd(150,50);
+        parameterVec(historyParams+8,1) = normrnd(150,50);
+        parameterVec(historyParams+9,1) = normrnd(1,0.1);
+        parameterVec(historyParams+10,1) = normrnd(pi,pi/4);
+        parameterVec(historyParams+11,1) = normrnd(pi,pi/4);
+        parameterVec(historyParams+12,1) = normrnd(0,1);
+        parameterVec(historyParams+13,1) = normrnd(0,1);
+        parameterVec(historyParams+14,1) = normrnd(0,1);
+        parameterVec(historyParams+15,1) = normrnd(0,1);
+        parameterVec(end,1) = normrnd(0,1);
+        
+        parameterVec(:,1) = max(Bounds(:,1),min(parameterVec(:,1),Bounds(:,2)));
         
         % currently requires 0.045 seconds ... 0.0864 seconds
         %  just to get it to run in 1 day
         likelihoodXprev = GetLikelihood(parameterVec(:,1));
-
+        tempLikelihood = zeros(numIter,1);
+        tempLikelihood(1) = likelihoodXprev;
         
         sigma = zeros(numParameters,1);
-        sigma(1:historyParams) = ones(historyParams,1).*10;
+        sigma(1:historyParams) = 0.5.*ones(historyParams,1);
         sigma(historyParams+1) = 0.1;
-        sigma(historyParams+2) = 10;
-        sigma(historyParams+3) = 10;
-        sigma(historyParams+4) = 10;
+        sigma(historyParams+2) = 1;
+        sigma(historyParams+3) = 0.1;
+        sigma(historyParams+4) = twopi/10;
         sigma(historyParams+5) = 10;
-        sigma(historyParams+6) = 0.1;
-        sigma(historyParams+7) = 0.1;
-        sigma(historyParams+8) = 0.1;
+        sigma(historyParams+6) = 10;
+        sigma(historyParams+7) = 5;
+        sigma(historyParams+8) = 5;
+        sigma(historyParams+9) = 0.1;
+        sigma(historyParams+10) = twopi/10;
+        sigma(historyParams+11) = twopi/10;
+        sigma(historyParams+12) = 0.1;
+        sigma(historyParams+13) = 0.1;
+        sigma(historyParams+14) = 0.1;
+        sigma(historyParams+15) = 0.1;
+        sigma(end) = 0.5;
         
         rejectRate = 0;
         for iter = 2:numIter
             xStar = parameterVec(:,iter)+normrnd(0,sigma,[numParameters,1]);
-            xStar(historyParams+7:historyParams+8) = mod(xStar(historyParams+7:historyParams+8),twopi);
-            temp = xStar(1:historyParams+6)-Bounds(1:historyParams+6,1);
+            xStar([historyParams+4,historyParams+10,historyParams+11]) = ...
+                mod(xStar([historyParams+4,historyParams+10,historyParams+11]),twopi);
+            temp = xStar-Bounds(:,1);
             
             if sum(temp<0) > 0 % outside bounds
                 parameterVec(:,iter) = parameterVec(:,iter-1);
@@ -192,8 +261,7 @@ for zz=1:totalUnits
                 likelihoodXstar = GetLikelihood(xStar);
                 %         A = min(1,(likelihoodXstar*priorXstar)./(likelihoodXprev*priorXprev));
                 %             A = min(1,likelihoodXprev/likelihoodXstar);
-                logA = likelihoodXstar-likelihoodXprev;
-                if log(rand) < logA
+                if log(rand) < (likelihoodXstar-likelihoodXprev)
                     parameterVec(:,iter) = xStar;
                     likelihoodXprev = likelihoodXstar;
                 else
@@ -201,25 +269,25 @@ for zz=1:totalUnits
                     rejectRate = rejectRate+1;
                 end
             end
-                
+            tempLikelihood(iter) = likelihoodXprev;
         end
         
         fprintf('Rejection Rate: %3.2f',rejectRate/numIter);
         
-        PosteriorSamples = parameterVec(:,burnIn:40:numIter);
+        PosteriorSamples(zz,:,:) = parameterVec(:,burnIn:skipRate:numIter);
+        Likelihood(zz,:) = tempLikelihood(:,burnIn:skipRate:numIter);
         
-        PosteriorMean = zeros(numParameters,1);
-        PosteriorInterval = zeros(numParameters,2);
         alpha = 0.05;
         
         numColumns = 4;
         numRows = floor(numParameters/numColumns)+mod(numParameters,numColumns);
         for ii=1:numParameters
            subplot(numRows,numColumns,ii);
-           histogram(PosteriorSamples(ii,:));
+           histogram(squeeeze(PosteriorSamples(zz,ii,:)));
            title('Marginal Posterior, Parameter %d',ii);
-           PosteriorMean(ii) = mean(PosteriorSamples(ii,:));
-           PosteriorInterval(ii,:) = quantile(PosteriorSamples(ii,:),[alpha/2,1-alpha/2]);
+           PosteriorMean(zz,ii) = mean(PosteriorSamples(ii,:));
+           PosteriorInterval(zz,ii,:) = quantile(squeeze(PosteriorSamples(zz,ii,:)),...
+               [alpha/2,1-alpha/2]);
         end
 end
 
@@ -227,33 +295,28 @@ end
 end
 
 function [loglikelihood] = GetLikelihood(parameterVec)
-global newS pointProcessStimTimes historyParams xmesh ymesh numPixels ...
-    historyDesign Y stimulusTime;
+global unbiasedS pointProcessStimTimes historyParams historyDesign ...
+    stimulusTime X Y T gaborFun nonLinFun spikeTrain ...
+    movement trainMillisecs;
 
-baseMu = exp(historyDesign(1,:)*parameterVec(1:historyParams));
-loglikelihood = sum(Y(pointProcessStimTimes==0).*log(baseMu)-baseMu);
+baseMu = historyDesign(1:trainMillisecs,:)*parameterVec(1:historyParams);
+moveMu = parameterVec(end).*movement(1:trainMillisecs);
 
+gabor = gaborFun(X,Y,T,parameterVec(historyParams+1),parameterVec(historyParams+2),...
+    parameterVec(historyParams+3),parameterVec(historyParams+4),parameterVec(historyParams+5),...
+    parameterVec(historyParams+6),parameterVec(historyParams+7),...
+    parameterVec(historyParams+8),parameterVec(historyParams+9),...
+    parameterVec(historyParams+10),parameterVec(historyParams+11));
+filterEnergy = sum(sum(sum(gabor.*gabor)));
 
-
-gaborFilter = parameterVec(historyParams+1)*exp(-(xmesh-parameterVec(historyParams+2)).^2 ...
-        ./(2*parameterVec(historyParams+4).^2)-(ymesh-parameterVec(historyParams+3)).^2 ...
-        ./(2*parameterVec(historyParams+5).^2)).*sin(2*pi*parameterVec(historyParams+6)*...
-        ((xmesh-parameterVec(historyParams+2))*cos(parameterVec(historyParams+7)-pi/2)+...
-        (ymesh-parameterVec(historyParams+3))*sin(parameterVec(historyParams+7)-pi/2))+...
-        parameterVec(historyParams+8));
-gaborFilter = gaborFilter(:);
-
-zz = find(pointProcessStimTimes~=0);
-loglikelihoodTwo = zeros(length(zz),1);
-
-for kk=1:stimulusTime:length(zz)
+filterOutput = zeros(trainMillisecs,1);
+for kk=29000:trainMillisecs
 %     onScreenStim = squeeze(newS(pointProcessStimTimes(zz(kk)),:,:));
 %     if mod(kk,stimulusTime) == 1
 %         filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
 %     end
-    filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
-    
-    loglikelihoodTwo(kk:kk+stimulusTime-1) = Y(zz(kk:kk+stimulusTime-1))*log(baseMu*exp(filterOutput))-baseMu*exp(filterOutput);
+    filterOutput(kk) = sum(sum(sum(unbiasedS(:,:,pointProcessStimTimes(kk-201:stimulusTime:kk))...
+        .*gabor./filterEnergy)));
 end
 
 % for kk=1:numStimuli
@@ -262,6 +325,10 @@ end
 %        baseMu*exp(filterOutput);
 % end
 
-loglikelihood = loglikelihood+sum(loglikelihoodTwo);
+filterOutput = nonLinFun(filterOutput,parameterVec(historyParams+12),...
+    parameterVec(historyParams+13),parameterVec(historyParams+14),...
+    parameterVec(historyParams+15));
+loglikelihood = sum(spikeTrain(timeVec).*(baseMu+moveMu+filterOutput)-...
+    exp(baseMu+moveMu+filterOutput));
 end
 
