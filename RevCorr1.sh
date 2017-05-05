@@ -1,7 +1,7 @@
 #!/bin/bash -l
 
 # 24 hour time limit
-#$ -l h_rt=24:00:00
+#$ -l h_rt=50:00:00
 #$ -N RevCorr1
 #$ -j y
 #$ -o RevCorr1Outputs.txt
