@@ -1,5 +1,5 @@
 % SIMULATE DATA and test algorithm
-numStimuli = 8000;train = round(numStimuli*0.7);
+numStimuli = 4000;train = round(numStimuli*0.7);
 N = 30;
 DIM = [N,N,numStimuli];beta = -3;
 
@@ -7,7 +7,7 @@ u = [(0:floor(DIM(1)*2/2)) -(ceil(DIM(1)*2/2)-1:-1:1)]'/(2*DIM(1));
 v = [(0:floor(DIM(2)*2/2)) -(ceil(DIM(2)*2/2)-1:-1:1)]'/(2*DIM(2));
 t = [(0:floor(DIM(3)*2/2)) -(ceil(DIM(3)*2/2)-1:-1:1)]'/(2*DIM(3));
 [V,U,T] = meshgrid(v,u,t);
-S_f = single((U.^2+V.^2+T.^2).^(beta/2));
+S_f = (U.^2+V.^2+T.^2).^(beta/2);
 clear U V T u v t;
 S_f(S_f==inf) = 0;
 % S_f = S_f.^0.5;
@@ -100,13 +100,13 @@ for kk=1:timePoints
     end
 end
 
-bigLambda = logspace(1,4,10);
+bigLambda = logspace(1,4,5);
 RMS = zeros(length(bigLambda),1);
 tempF = zeros(length(bigLambda),N*N*timePoints);
-parfor ii=1:length(bigLambda)
+for ii=1:length(bigLambda)
     A = [newS(1:train,:);bigLambda(ii).*L];
     constraints = [r(1:train);zeros(N*N*timePoints,1)];
-    fhat = pinv(double(A))*double(constraints);
+    fhat = double(A)\double(constraints);
     tempF(ii,:) = fhat;
     RMS(ii) = norm(r(train+1:end)-newS(train+1:end,:)*fhat)./sqrt(N*N*timePoints);
     display(ii);
@@ -115,7 +115,7 @@ end
 
 constraints = [double(r);zeros(N*N*timePoints,1)];
 A = [double(newS);double(bigLambda(bestMap).*L)];
-fhat = pinv(A)*constraints;
+fhat = A\constraints;
 
 %fhat = tempF(bestMap,:);
 
