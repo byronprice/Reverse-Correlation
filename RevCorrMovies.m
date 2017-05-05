@@ -127,7 +127,9 @@ pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 for ii=1:totalUnits
    spikeTimes = round(allts{ii}.*1000);
    for jj=1:length(spikeTimes)
-      pointProcessSpikes(spikeTimes(jj),ii) = 1;
+      if spikeTimes(jj) > 0
+        pointProcessSpikes(spikeTimes(jj),ii) = 1;
+      end
    end
 end
 
@@ -136,7 +138,7 @@ spikeCountLen = 0.02;
 kernelSteps = 0.02;
 kernelLenFull = kernelLen/kernelSteps+1;
     
-totalStims = 10000;
+totalStims = 2000;
 firstStim = strobeData(1)+kernelLen;
 lastStim = strobeData(end);
 
@@ -192,7 +194,8 @@ save(fileName,'unbiasedS','Response','allts','totalUnits',...
     'totalMillisecs','beta','kernelSteps','movie_FrameRate','stimOffsets');
 
 clearvars -except unbiasedS onScreenInds Response DIM kernelLenFull screenPix_to_effPix ...
-    DistToScreen totalStims conv_factor kernelLen totalUnits AnimalName Date NoiseType;
+    DistToScreen totalStims conv_factor kernelLen totalUnits AnimalName Date NoiseType ...
+    spikeCountLen;
 
 
 % CREATE LAPLACIAN MATRIX
@@ -255,9 +258,10 @@ for ii=1:totalUnits
     clear tempInds tempMov;
     
     for lambda = 1:length(bigLambda)
+        fprintf('Lambda: %3.2e\n',bigLambda(lambda));
         % VERTICALLY CONCATENATE S and L
         % onScreenMovie is size numStimuli X effectivePixels
-        tempF(lambda,:) = pinv(double([A;bigLambda(lambda).*L]))*constraints;  
+        tempF(lambda,:) = double([A;bigLambda(lambda).*L])\constraints;  
     end
     clear A;
         
