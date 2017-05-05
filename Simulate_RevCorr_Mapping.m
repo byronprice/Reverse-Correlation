@@ -1,17 +1,17 @@
 % SIMULATE DATA and test algorithm
-numStimuli = 10000;train = round(numStimuli*0.7);
+numStimuli = 8000;train = round(numStimuli*0.7);
 N = 30;
 DIM = [N,N,numStimuli];beta = -3;
 
-u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
-v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
+u = [(0:floor(DIM(1)*2/2)) -(ceil(DIM(1)*2/2)-1:-1:1)]'/(2*DIM(1));
+v = [(0:floor(DIM(2)*2/2)) -(ceil(DIM(2)*2/2)-1:-1:1)]'/(2*DIM(2));
 t = [(0:floor(DIM(3)*2/2)) -(ceil(DIM(3)*2/2)-1:-1:1)]'/(2*DIM(3));
-[U,V,T] = meshgrid(u,v,t);
+[V,U,T] = meshgrid(v,u,t);
 S_f = single((U.^2+V.^2+T.^2).^(beta/2));
 clear U V T u v t;
 S_f(S_f==inf) = 0;
 % S_f = S_f.^0.5;
-phi = rand([DIM(2),DIM(1),DIM(3)*2],'single');
+phi = rand([DIM(1)*2,DIM(2)*2,DIM(3)*2],'single');
 tempFFT = S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi));
 X = real(ifftn(tempFFT));
 
@@ -32,35 +32,39 @@ end
 
 
 S = uint8(X);
-unbiasedS = real(ifftn(fftn(single(S))./S_f));
+unbiasedS = real(ifftn(fftn(double(S))./S_f));
 clear X Y S_f phi tempFFT;
-unbiasedS = unbiasedS(:,:,1:numStimuli);
-S = S(:,:,1:numStimuli);
+unbiasedS = unbiasedS(1:DIM(1),1:DIM(2),1:numStimuli);
+S = S(1:DIM(1),1:DIM(2),1:numStimuli);
 
-gaborFun = @(x,y,t,xc,yc,sigma,k,n,gama,spatFreq,v,theta,phi) ...
-    exp(-((x-xc).^2+gama.*gama.*(y-yc).^2)/(2*sigma*sigma))...
+gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
+    exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
+    ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
     .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc)+v.*t)-phi)...
     .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
 
-x = linspace(-15,15,N);y = linspace(-15,15,N);
-t = 150:-1000/50:0;
-[x,y,t] = meshgrid(x,y,t);
-gabor = gaborFun(x,y,t,0,0,3,0.4,20,1,0.05,0,60*pi/180,0);
-gaborEnergy = sum(sum(sum(gabor.*gabor)));
+nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base)/slope)./(1+exp((x-base)/slope))-drop;
 
+x = linspace(-15,15,N);y = linspace(-15,15,N);
+t = linspace(150,0,16);
+[x,y,t] = meshgrid(x,y,t);
+gabor = gaborFun(x,y,t,0.4,15,0,pi/6,0,0,4,3,0.1,60*pi/180,0);
+gaborEnergy = sum(gabor(:).*gabor(:));
 timePoints = size(t,3);
+
+base = 20;slope = 5;rise = 5;drop = 0;
 
 r = zeros(numStimuli-(timePoints-1),1);
 filterOutput = zeros(numStimuli-(timePoints-1),1);
-newS = zeros(numStimuli-(timePoints-1),N*N*timePoints,'single');
+newS = zeros(numStimuli-(timePoints-1),N*N*timePoints);
 for ii=timePoints:numStimuli
-    Vid = single(S(:,:,ii-(timePoints-1):ii));
+    Vid = double(S(:,:,ii-(timePoints-1):ii));
     filteredVid = Vid.*gabor;
-    gaborOutput = sum(filteredVid(:)).*gaborEnergy;
-    lambda = exp(25*gaborOutput);
+    gaborOutput = sum(filteredVid(:));
+    lambda = nonLinFun(gaborOutput,base,slope,rise,drop);
     r(ii-(timePoints-1)) = poissrnd(lambda);
     filterOutput(ii-(timePoints-1)) = gaborOutput;
-    temp = single(unbiasedS(:,:,ii-(timePoints-1):ii));
+    temp = unbiasedS(:,:,ii-(timePoints-1):ii);
     newS(ii-(timePoints-1),:) = temp(:);
 end
 clear unbiasedS S;
@@ -99,7 +103,7 @@ end
 bigLambda = logspace(1,4,10);
 RMS = zeros(length(bigLambda),1);
 tempF = zeros(length(bigLambda),N*N*timePoints);
-for ii=1:length(bigLambda)
+parfor ii=1:length(bigLambda)
     A = [newS(1:train,:);bigLambda(ii).*L];
     constraints = [r(1:train);zeros(N*N*timePoints,1)];
     fhat = pinv(double(A))*double(constraints);

@@ -30,7 +30,7 @@ gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
     .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
 
 %nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
-nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base)/slope)./(1+exp((x-base)/slope))-drop;
+nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base)./slope)./(1+exp((x-base)./slope))-drop;
 %nonLinFun = @(x,slope,intercept) max(0,slope.*x+intercept);
 
 % horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
@@ -145,31 +145,31 @@ for ii=1:totalUnits
 end
 
 
-historyParams = 10;
+historyParams = 25;
 gaborParams = 11;
-nonLinParams = 2;
+nonLinParams = 4;
 numParameters = historyParams+gaborParams+nonLinParams+1;
 
 twopi = 2*pi;
 Bounds = zeros(numParameters,2);
 Bounds(1:historyParams,1) = -200;
-Bounds(1:historyParams,2) = 20;
-Bounds(historyParams+1,:) = [0,10];% k time-filter parameter
-Bounds(historyParams+2,:) = [0,50]; % n time-filter parameter
+Bounds(1:historyParams,2) = 200;
+Bounds(historyParams+1,:) = [1e-2,50];% k time-filter parameter
+Bounds(historyParams+2,:) = [1e-1,100]; % n time-filter parameter
 Bounds(historyParams+3,:) = [-100,100]; % v time-filter parameter
 Bounds(historyParams+4,:) = [0,twopi]; % A orientation of Gabor
 Bounds(historyParams+5,:) = [min(xaxis)-5,max(xaxis)+5]; % x center
 Bounds(historyParams+6,:) = [min(yaxis)-5,max(yaxis)+5]; % y center
-Bounds(historyParams+7,:) = [1e-4,500]; % standard deviation x
-Bounds(historyParams+8,:) = [1e-4,500]; % standard deviation y
+Bounds(historyParams+7,:) = [1,500]; % standard deviation x
+Bounds(historyParams+8,:) = [1,500]; % standard deviation y
 Bounds(historyParams+9,:) = [0,100]; % spatial frequency
 Bounds(historyParams+10,:) = [0,twopi]; %  orientation theta
 Bounds(historyParams+11,:) = [0,twopi]; % phase shift phi
 Bounds(historyParams+12,:) = [-200,200]; % sigmoid base
-Bounds(historyParams+13,:) = [-200,200]; % sigmoid slope
-Bounds(historyParams+14,:) = [-200,200]; % sigmoid rise
+Bounds(historyParams+13,:) = [1e-4,200]; % sigmoid slope
+Bounds(historyParams+14,:) = [0,200]; % sigmoid rise
 Bounds(historyParams+15,:) = [-200,200]; % sigmoid drop
-Bounds(end,:) = [-200,20]; % parameter for movement modulation
+Bounds(end,:) = [-200,200]; % parameter for movement modulation
 
 numIter = 5e5;burnIn = 1e5;skipRate = 50;
 
@@ -182,8 +182,7 @@ for zz=1:totalUnits
         
         spikeTrain = pointProcessSpikes(:,zz);
         historyDesign = zeros(totalMillisecs,historyParams);
-        
-        
+            
         % get history dependence (past 25ms)
         historyDesign(:,1) = ones(totalMillisecs,1,'single');
         for kk=2:historyParams
@@ -192,6 +191,8 @@ for zz=1:totalUnits
             historyDesign(:,kk) = history(1:(end-(kk-1)));
         end
         
+        [b,dev,stats] = glmfit([historyDesign,movement],spikeTrain,'poisson','constant','off');
+        
         
         % RUN MCMC
         h = ones(numParameters,1)./1000;
@@ -199,57 +200,55 @@ for zz=1:totalUnits
         numIter = 5e5;burnIn = 1e5;
         parameterVec = zeros(numParameters,numIter);
         
-        for ii=1:historyParams
-            parameterVec(ii,1) = normrnd(0,1);
-        end
+        parameterVec(1:historyParams,1) = b(1:historyParams);
+        parameterVec(end,1) = b(end);
         
         parameterVec(historyParams+1,1) = normrnd(0.5,0.1);
         parameterVec(historyParams+2,1) = normrnd(15,5);
         parameterVec(historyParams+3,1) = normrnd(0,0.1);
         parameterVec(historyParams+4,1) = normrnd(pi,pi/4);
-        parameterVec(historyParams+5,1) = normrnd(max(xaxis)/2,300);
-        parameterVec(historyParams+6,1) = normrnd(max(yaxis)/2,200);
+        parameterVec(historyParams+5,1) = normrnd(0,300);
+        parameterVec(historyParams+6,1) = normrnd(0,200);
         parameterVec(historyParams+7,1) = normrnd(150,50);
         parameterVec(historyParams+8,1) = normrnd(150,50);
-        parameterVec(historyParams+9,1) = normrnd(1,0.1);
+        parameterVec(historyParams+9,1) = normrnd(0.4,0.1);
         parameterVec(historyParams+10,1) = normrnd(pi,pi/4);
         parameterVec(historyParams+11,1) = normrnd(pi,pi/4);
-        parameterVec(historyParams+12,1) = normrnd(0,1);
-        parameterVec(historyParams+13,1) = normrnd(0,1);
-        parameterVec(historyParams+14,1) = normrnd(0,1);
+        parameterVec(historyParams+12,1) = normrnd(2,1);
+        parameterVec(historyParams+13,1) = normrnd(1,0.5);
+        parameterVec(historyParams+14,1) = normrnd(1,0.5);
         parameterVec(historyParams+15,1) = normrnd(0,1);
-        parameterVec(end,1) = normrnd(0,1);
         
         parameterVec(:,1) = max(Bounds(:,1),min(parameterVec(:,1),Bounds(:,2)));
         
-        % currently requires 0.045 seconds ... 0.0864 seconds
-        %  just to get it to run in 1 day
         likelihoodXprev = GetLikelihood(parameterVec(:,1));
         tempLikelihood = zeros(numIter,1);
         tempLikelihood(1) = likelihoodXprev;
         
+        scatter(1,tempLikelihood(1));hold on;pause(0.1);
+        
         sigma = zeros(numParameters,1);
-        sigma(1:historyParams) = 0.5.*ones(historyParams,1);
-        sigma(historyParams+1) = 0.1;
-        sigma(historyParams+2) = 1;
-        sigma(historyParams+3) = 0.1;
-        sigma(historyParams+4) = twopi/10;
-        sigma(historyParams+5) = 10;
-        sigma(historyParams+6) = 10;
-        sigma(historyParams+7) = 5;
-        sigma(historyParams+8) = 5;
-        sigma(historyParams+9) = 0.1;
-        sigma(historyParams+10) = twopi/10;
-        sigma(historyParams+11) = twopi/10;
-        sigma(historyParams+12) = 0.1;
-        sigma(historyParams+13) = 0.1;
-        sigma(historyParams+14) = 0.1;
-        sigma(historyParams+15) = 0.1;
-        sigma(end) = 0.5;
+        sigma(1:historyParams) = abs(0.5.*b(1:historyParams));
+        sigma(historyParams+1) = 0.2;
+        sigma(historyParams+2) = 5;
+        sigma(historyParams+3) = 0.5;
+        sigma(historyParams+4) = twopi/4;
+        sigma(historyParams+5) = 50;
+        sigma(historyParams+6) = 50;
+        sigma(historyParams+7) = 20;
+        sigma(historyParams+8) = 20;
+        sigma(historyParams+9) = 0.5;
+        sigma(historyParams+10) = twopi/4;
+        sigma(historyParams+11) = twopi/4;
+        sigma(historyParams+12) = 1;
+        sigma(historyParams+13) = 1;
+        sigma(historyParams+14) = 1;
+        sigma(historyParams+15) = 1;
+        sigma(end) = abs(0.5*b(end));
         
         rejectRate = 0;
         for iter = 2:numIter
-            xStar = parameterVec(:,iter)+normrnd(0,sigma,[numParameters,1]);
+            xStar = parameterVec(:,iter-1)+normrnd(0,sigma,[numParameters,1]);
             xStar([historyParams+4,historyParams+10,historyParams+11]) = ...
                 mod(xStar([historyParams+4,historyParams+10,historyParams+11]),twopi);
             temp = xStar-Bounds(:,1);
@@ -259,11 +258,13 @@ for zz=1:totalUnits
                 rejectRate = rejectRate+1;
             else
                 likelihoodXstar = GetLikelihood(xStar);
+                scatter(iter,likelihoodXstar);hold on;pause(0.1);
                 %         A = min(1,(likelihoodXstar*priorXstar)./(likelihoodXprev*priorXprev));
                 %             A = min(1,likelihoodXprev/likelihoodXstar);
                 if log(rand) < (likelihoodXstar-likelihoodXprev)
                     parameterVec(:,iter) = xStar;
                     likelihoodXprev = likelihoodXstar;
+                    display('improve');
                 else
                     parameterVec(:,iter) = parameterVec(:,iter-1);
                     rejectRate = rejectRate+1;
@@ -307,21 +308,23 @@ gabor = gaborFun(X,Y,T,parameterVec(historyParams+1),parameterVec(historyParams+
     parameterVec(historyParams+6),parameterVec(historyParams+7),...
     parameterVec(historyParams+8),parameterVec(historyParams+9),...
     parameterVec(historyParams+10),parameterVec(historyParams+11));
-filterEnergy = sum(sum(sum(gabor.*gabor)));
+%filterEnergy = sum(gabor(:).*gabor(:));
 
 filterOutput = zeros(trainMillisecs,1);
 %stimLen = 29000:stimulusTime:trainMillisecs;
-parfor kk=30000:trainMillisecs
+
+for kk=30000:stimulusTime:trainMillisecs
 %     onScreenStim = squeeze(newS(pointProcessStimTimes(zz(kk)),:,:));
 %     if mod(kk,stimulusTime) == 1
 %         filterOutput = sum(newS(pointProcessStimTimes(zz(kk),:))'.*gaborFilter)./numPixels;
 %     end
-    filterOutput(kk) = sum(sum(sum(unbiasedS(:,:,pointProcessStimTimes(kk-201:stimulusTime:kk))...
-        .*gabor./filterEnergy)));
+    filterOutput(kk-stimulusTime/2:kk+stimulusTime/2-1) = ...
+        sum(sum(sum(unbiasedS(:,:,pointProcessStimTimes(kk-201:stimulusTime:kk))...
+        .*gabor)));
 end
 
 filterOutput(1:30000) = sum(sum(sum(unbiasedS(:,:,pointProcessStimTimes(1:stimulusTime:201))...
-        .*gabor./filterEnergy)));
+        .*gabor)));
 
 % for kk=1:numStimuli
 %    filterOutput = sum(newS(kk,:)'.*gaborFilter)./numPixels;
@@ -329,10 +332,14 @@ filterOutput(1:30000) = sum(sum(sum(unbiasedS(:,:,pointProcessStimTimes(1:stimul
 %        baseMu*exp(filterOutput);
 % end
 
+%figure();plot(filterOutput);
+
 filterOutput = nonLinFun(filterOutput,parameterVec(historyParams+12),...
     parameterVec(historyParams+13),parameterVec(historyParams+14),...
     parameterVec(historyParams+15));
-loglikelihood = sum(spikeTrain(timeVec).*(baseMu+moveMu+filterOutput)-...
+
+
+loglikelihood = sum(spikeTrain(1:trainMillisecs).*(baseMu+moveMu+filterOutput)-...
     exp(baseMu+moveMu+filterOutput));
 end
 

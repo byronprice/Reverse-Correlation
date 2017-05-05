@@ -189,7 +189,7 @@ fileName = strcat('NoiseMovieConvertedData',NoiseType,num2str(Date),'_',num2str(
 save(fileName,'unbiasedS','Response','allts','totalUnits',...
     'movieTime_Seconds','LFP','movement','DIM','pointProcessStimTimes',...
     'pointProcessSpikes','totalTime','totalStims','kernelLen','kernelLenFull',...
-    'kernelShift','totalMillisecs','beta','kernelSteps','movie_FrameRate');
+    'totalMillisecs','beta','kernelSteps','movie_FrameRate','stimOffsets');
 
 clearvars -except unbiasedS onScreenInds Response DIM kernelLenFull screenPix_to_effPix ...
     DistToScreen totalStims conv_factor kernelLen totalUnits AnimalName Date NoiseType;
@@ -279,8 +279,6 @@ for ii=1:totalUnits
     
     [~,bestMap] = min(RMS);
     F(ii,:) = tempF(bestMap,:);
-    fileName = strcat('NoiseMovie',NoiseType,'-Unit',num2str(ii),num2str(Date),'_',num2str(AnimalName),'.mat');
-    save(fileName,'tempF','bestMap','bigLambda');
 end
 
 horzDegrees = atand((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);

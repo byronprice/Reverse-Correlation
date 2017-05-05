@@ -40,7 +40,7 @@ for jj=1:500
     desiredMin = 0;
     desiredMax = 255;
     Grey = 127;%desiredStd = 38;
-    for ii=1:numStimuli*2
+    parfor ii=1:numStimuli*2
         temp = X(:,:,ii);
         currentMax = max(temp(:));
         currentMin = min(temp(:));

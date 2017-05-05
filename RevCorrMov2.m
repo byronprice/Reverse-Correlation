@@ -257,8 +257,6 @@ for ii=1:totalUnits
     end
     [~,bestMap] = min(RMS);
     F(ii,:,:) = tempF(bestMap,:,:);
-    fileName = strcat('NoiseMovie',NoiseType,'-Unit',num2str(ii),num2str(Date),'_',num2str(AnimalName),'.mat');
-    save(fileName,'tempF','bestMap','bigLambda');
 end
 
 horzDegrees = atand((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
