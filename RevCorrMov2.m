@@ -26,7 +26,7 @@ function [] = RevCorrMov2(AnimalName,Date,NoiseType)
 %
 % Created: 2016/04/29, Commuter Rail Boston to Providence
 %  Byron Price
-% Updated: 2017/05/03
+% Updated: 2017/05/05
 % By: Byron Price
 
 %cd('~/CloudStation/ByronExp/NoiseRetino');
@@ -230,7 +230,7 @@ clear tempMat ii jj kk;
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
 
-bigLambda = [0,5,10];
+bigLambda = logspace(1,5,10);
 F = zeros(totalUnits,kernelLenFull,DIM(1)*DIM(2));
 train = round(totalStims*0.7);
 for ii=1:totalUnits
@@ -284,7 +284,7 @@ taxis = linspace(-kernelLen*1000,0,kernelLenFull);
 % end
 runTime = toc;
 
-fileName = strcat('NoiseMovieResults',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
+fileName = strcat('NoiseMovieResults10k',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 save(fileName,'F','Response','bigLambda','totalUnits','spikeCountLen',...
     'xaxis','yaxis','taxis','DIM','kernelLenFull','DistToScreen',...
     'screenPix_to_effPix','kernelLen','runTime','onScreenInds');

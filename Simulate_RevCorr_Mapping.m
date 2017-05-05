@@ -46,7 +46,7 @@ gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
 nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base)/slope)./(1+exp((x-base)/slope))-drop;
 
 x = linspace(-15,15,N);y = linspace(-15,15,N);
-t = linspace(150,0,16);
+t = linspace(150,0,10);
 [x,y,t] = meshgrid(x,y,t);
 gabor = gaborFun(x,y,t,0.4,15,0,pi/6,0,0,4,3,0.1,60*pi/180,0);
 gaborEnergy = sum(gabor(:).*gabor(:));
