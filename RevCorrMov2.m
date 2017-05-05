@@ -128,9 +128,12 @@ pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 for ii=1:totalUnits
    spikeTimes = round(allts{ii}.*1000);
    for jj=1:length(spikeTimes)
-      pointProcessSpikes(spikeTimes(jj),ii) = 1;
+       if spikeTimes(jj) > 0 
+          pointProcessSpikes(spikeTimes(jj),ii) = 1;
+       end
    end
 end
+
 numStimuli = 10000;
 kernelLen = 0.2;
 spikeCountLen = 0.02;
@@ -192,7 +195,8 @@ save(fileName,'unbiasedS','Response','allts','totalUnits',...
     'totalMillisecs','beta','kernelSteps','movie_FrameRate','stimOffsets');
 
 clearvars -except unbiasedS onScreenInds Response DIM kernelLenFull screenPix_to_effPix ...
-    DistToScreen totalStims conv_factor kernelLen totalUnits Date AnimalName NoiseType;
+    DistToScreen totalStims conv_factor kernelLen totalUnits Date AnimalName NoiseType ...
+    spikeCountLen;
 
 
 % CREATE LAPLACIAN MATRIX
@@ -226,7 +230,7 @@ clear tempMat ii jj kk;
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
 
-bigLambda = logspace(0,5,20);
+bigLambda = [0,5,10];
 F = zeros(totalUnits,kernelLenFull,DIM(1)*DIM(2));
 train = round(totalStims*0.7);
 for ii=1:totalUnits
@@ -237,12 +241,15 @@ for ii=1:totalUnits
     tempF = zeros(length(bigLambda),kernelLenFull,DIM(1)*DIM(2));
     RMS =  zeros(length(bigLambda),1);
     for lambda = 1:length(bigLambda)
+        fprintf('Lambda: %3.2e\n',bigLambda(lambda));
             % VERTICALLY CONCATENATE S and L
             % onScreenMovie is size numStimuli X effectivePixels
+        tic;
         for kk=1:kernelLenFull
             inds = onScreenInds(1:train,kk);
-            tempF(lambda,kk,:) = pinv(double([unbiasedS(:,inds)';bigLambda(lambda).*L]))*constraints;          
+            tempF(lambda,kk,:) = double([unbiasedS(:,inds)';bigLambda(lambda).*L])\constraints;
         end
+        toc;
         fhat = squeeze(tempF(lambda,:,:))';
         inds = onScreenInds(train+1:totalStims,:);
         A = zeros(length(inds),DIM(1)*DIM(2)*kernelLenFull);
