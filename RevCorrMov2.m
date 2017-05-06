@@ -30,7 +30,6 @@ function [] = RevCorrMov2(AnimalName,Date,NoiseType)
 % By: Byron Price
 
 %cd('~/CloudStation/ByronExp/NoiseRetino');
-tic;
 % read in the .plx file
 beta = 0;
 
@@ -230,27 +229,24 @@ clear tempMat ii jj kk;
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
 
-bigLambda = logspace(1,5,10);
-F = zeros(totalUnits,kernelLenFull,DIM(1)*DIM(2));
+bigLambda = logspace(2,6,10);
+F = zeros(totalUnits,length(bigLambda),kernelLenFull,DIM(1)*DIM(2));
+RMS = zeros(totalUnits,length(bigLambda));
 train = round(totalStims*0.7);
 for ii=1:totalUnits
     fprintf('Running unit: %d\n',ii);
     r = squeeze(Response{ii}(Response{ii}(:,2)==1,1));
     constraints = [r(1:train);zeros(DIM(1)*DIM(2),1)];
     
-    tempF = zeros(length(bigLambda),kernelLenFull,DIM(1)*DIM(2));
-    RMS =  zeros(length(bigLambda),1);
     for lambda = 1:length(bigLambda)
         fprintf('Lambda: %3.2e\n',bigLambda(lambda));
             % VERTICALLY CONCATENATE S and L
             % onScreenMovie is size numStimuli X effectivePixels
-        tic;
         for kk=1:kernelLenFull
             inds = onScreenInds(1:train,kk);
-            tempF(lambda,kk,:) = double([unbiasedS(:,inds)';bigLambda(lambda).*L])\constraints;
+            F(ii,lambda,kk,:) = double([unbiasedS(:,inds)';bigLambda(lambda).*L])\constraints;
         end
-        toc;
-        fhat = squeeze(tempF(lambda,:,:))';
+        fhat = squeeze(F(ii,lambda,:,:))';
         inds = onScreenInds(train+1:totalStims,:);
         A = zeros(length(inds),DIM(1)*DIM(2)*kernelLenFull);
         for ll=1:length(inds)
@@ -258,12 +254,12 @@ for ii=1:totalUnits
             tempMov = unbiasedS(:,tempInds);
             A(ll,:) = tempMov(:);
         end
-        RMS(lambda) = norm(r(train+1:totalStims)-A*fhat(:)./kernelLenFull)...
+        RMS(ii,lambda) = norm(r(train+1:totalStims)-A*fhat(:)./kernelLenFull)...
                 ./sqrt(DIM(1)*DIM(2)*kernelLenFull);
         clear A tempMov tempInds;
     end
-    [~,bestMap] = min(RMS);
-    F(ii,:,:) = tempF(bestMap,:,:);
+    fileName = sprintf('NoiseMovieResults%sUnit%d-%d_%d.mat',NoiseType,ii,Date,AnimalName);
+    save(fileName,'RMS','F','bigLambda','ii');
 end
 
 horzDegrees = atand((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
@@ -282,12 +278,11 @@ taxis = linspace(-kernelLen*1000,0,kernelLenFull);
 %         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
 %     end
 % end
-runTime = toc;
 
 fileName = strcat('NoiseMovieResults10k',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 save(fileName,'F','Response','bigLambda','totalUnits','spikeCountLen',...
     'xaxis','yaxis','taxis','DIM','kernelLenFull','DistToScreen',...
-    'screenPix_to_effPix','kernelLen','runTime','onScreenInds');
+    'screenPix_to_effPix','kernelLen','runTime','onScreenInds','RMS');
 
 %cd('~/Documents/Current-Projects/Reverse-Correlation');
 
