@@ -30,7 +30,6 @@ function [] = RevCorrMov2(AnimalName,Date,NoiseType)
 % By: Byron Price
 
 %cd('~/CloudStation/ByronExp/NoiseRetino');
-tic;
 % read in the .plx file
 beta = 0;
 
@@ -243,12 +242,10 @@ for ii=1:totalUnits
         fprintf('Lambda: %3.2e\n',bigLambda(lambda));
             % VERTICALLY CONCATENATE S and L
             % onScreenMovie is size numStimuli X effectivePixels
-        tic;
         for kk=1:kernelLenFull
             inds = onScreenInds(1:train,kk);
             F(ii,lambda,kk,:) = double([unbiasedS(:,inds)';bigLambda(lambda).*L])\constraints;
         end
-        toc;
         fhat = squeeze(F(ii,lambda,:,:))';
         inds = onScreenInds(train+1:totalStims,:);
         A = zeros(length(inds),DIM(1)*DIM(2)*kernelLenFull);
@@ -261,6 +258,8 @@ for ii=1:totalUnits
                 ./sqrt(DIM(1)*DIM(2)*kernelLenFull);
         clear A tempMov tempInds;
     end
+    fileName = sprintf('NoiseMovieResults%sUnit%d-%d_%d.mat',NoiseType,ii,Date,AnimalName);
+    save(fileName,'RMS','F','bigLambda','ii');
 end
 
 horzDegrees = atand((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
@@ -279,7 +278,6 @@ taxis = linspace(-kernelLen*1000,0,kernelLenFull);
 %         xlabel('Azimuth (dva)');ylabel('Altitude (dva)');
 %     end
 % end
-runTime = toc;
 
 fileName = strcat('NoiseMovieResults10k',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
 save(fileName,'F','Response','bigLambda','totalUnits','spikeCountLen',...

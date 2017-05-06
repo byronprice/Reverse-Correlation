@@ -4,7 +4,7 @@
 #$ -l h_rt=50:00:00
 #$ -N RevCorr1
 #$ -j y
-#$ -o RevCorr1Outputs.txt
+#$ -o RevCorr1Output.txt
 #$ -l mem_per_core=16G
 #$ -pe omp 16
 
