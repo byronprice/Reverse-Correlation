@@ -1,5 +1,5 @@
-function [] = RevCorrMov2(AnimalName,Date,NoiseType)
-%RevCorrMov2.m
+function [] = RevCorrMov(AnimalName,Date,NoiseType,startUnit)
+%RevCorrMov.m
 %   %   Analysis of single unit recording data in response to a white
 %   or pink noise movie (see Noise_Movie.m for Psychtoolbox
 %   stimulus)
@@ -33,7 +33,7 @@ function [] = RevCorrMov2(AnimalName,Date,NoiseType)
 % read in the .plx file
 beta = 0;
 
-EphysFileName = strcat('NoiseMovieData',NoiseType,num2str(Date),'_',num2str(AnimalName),'-sort.mat');
+EphysFileName = strcat('NoiseMovieData',NoiseType,num2str(Date),'_',num2str(AnimalName),'-sort2.mat');
 
 % if exist(EphysFileName,'file') ~= 2
 %    readall(strcat(EphysFileName(1:end-4),'.plx'));pause(1);
@@ -133,7 +133,6 @@ for ii=1:totalUnits
    end
 end
 
-numStimuli = 10000;
 kernelLen = 0.2;
 spikeCountLen = 0.02;
 kernelSteps = 0.01;
@@ -142,10 +141,11 @@ kernelLenFull = kernelLen/kernelSteps+1;
 firstStim = strobeData(1)+kernelLen;
 lastStim = strobeData(end);
 
-stimOffsets = unifrnd(firstStim,lastStim,[numStimuli,1]);
+
 
 if exist('movement','var')
-    
+    numStimuli = 12000;
+    stimOffsets = unifrnd(firstStim,lastStim,[numStimuli,1]);
     Response = cell(totalUnits,1);
     for ii=1:totalUnits
         Response{ii,1} = zeros(numStimuli,2,'single');
@@ -159,6 +159,8 @@ if exist('movement','var')
     end
     
 else
+    numStimuli = 10000;
+    stimOffsets = unifrnd(firstStim,lastStim,[numStimuli,1]);
     Response = cell(totalUnits,1);
     for ii=1:totalUnits
         
@@ -195,7 +197,7 @@ save(fileName,'unbiasedS','Response','allts','totalUnits',...
 
 clearvars -except unbiasedS onScreenInds Response DIM kernelLenFull screenPix_to_effPix ...
     DistToScreen totalStims conv_factor kernelLen totalUnits Date AnimalName NoiseType ...
-    spikeCountLen;
+    spikeCountLen startUnit;
 
 
 % CREATE LAPLACIAN MATRIX
@@ -233,7 +235,7 @@ bigLambda = logspace(2,6,10);
 F = zeros(totalUnits,length(bigLambda),kernelLenFull,DIM(1)*DIM(2));
 RMS = zeros(totalUnits,length(bigLambda));
 train = round(totalStims*0.7);
-for ii=1:totalUnits
+for ii=startUnit:totalUnits
     fprintf('Running unit: %d\n',ii);
     r = squeeze(Response{ii}(Response{ii}(:,2)==1,1));
     constraints = [r(1:train);zeros(DIM(1)*DIM(2),1)];
@@ -244,7 +246,8 @@ for ii=1:totalUnits
             % onScreenMovie is size numStimuli X effectivePixels
         for kk=1:kernelLenFull
             inds = onScreenInds(1:train,kk);
-            F(ii,lambda,kk,:) = double([unbiasedS(:,inds)';bigLambda(lambda).*L])\constraints;
+            A = double([unbiasedS(:,inds)';bigLambda(lambda).*L]);
+            F(ii,lambda,kk,:) = A\constraints;
         end
         fhat = squeeze(F(ii,lambda,:,:))';
         inds = onScreenInds(train+1:totalStims,:);
@@ -279,10 +282,10 @@ taxis = linspace(-kernelLen*1000,0,kernelLenFull);
 %     end
 % end
 
-fileName = strcat('NoiseMovieResults10k',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
+fileName = sprintf('NoiseMovieResults%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(fileName,'F','Response','bigLambda','totalUnits','spikeCountLen',...
     'xaxis','yaxis','taxis','DIM','kernelLenFull','DistToScreen',...
-    'screenPix_to_effPix','kernelLen','runTime','onScreenInds','RMS');
+    'screenPix_to_effPix','kernelLen','onScreenInds','RMS','totalStims');
 
 %cd('~/Documents/Current-Projects/Reverse-Correlation');
 
