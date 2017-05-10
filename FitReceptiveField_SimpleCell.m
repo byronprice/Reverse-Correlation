@@ -30,7 +30,7 @@ gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
     .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
 
 %nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
-nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base)./slope)./(1+exp((x-base)./slope))-drop;
+nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base).*slope)./(1+exp((x-base).*slope))-drop;
 %nonLinFun = @(x,slope,intercept) max(0,slope.*x+intercept);
 
 % horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
@@ -166,7 +166,7 @@ Bounds(historyParams+9,:) = [0,100]; % spatial frequency
 Bounds(historyParams+10,:) = [0,twopi]; %  orientation theta
 Bounds(historyParams+11,:) = [0,twopi]; % phase shift phi
 Bounds(historyParams+12,:) = [-200,200]; % sigmoid base
-Bounds(historyParams+13,:) = [1e-4,200]; % sigmoid slope
+Bounds(historyParams+13,:) = [0,200]; % sigmoid slope
 Bounds(historyParams+14,:) = [0,200]; % sigmoid rise
 Bounds(historyParams+15,:) = [-200,200]; % sigmoid drop
 Bounds(end,:) = [-200,200]; % parameter for movement modulation
@@ -185,11 +185,6 @@ for zz=1:totalUnits
             
         % get history dependence (past 25ms)
         historyDesign(:,1) = ones(totalMillisecs,1,'single');
-        for kk=2:historyParams
-            temp = spikeTrain;shift = zeros(kk-1,1);
-            history = [shift;temp];
-            historyDesign(:,kk) = history(1:(end-(kk-1)));
-        end
         
         [b,dev,stats] = glmfit([historyDesign,movement],spikeTrain,'poisson','constant','off');
         
@@ -215,7 +210,7 @@ for zz=1:totalUnits
         parameterVec(historyParams+10,1) = normrnd(pi,pi/4);
         parameterVec(historyParams+11,1) = normrnd(pi,pi/4);
         parameterVec(historyParams+12,1) = normrnd(2,1);
-        parameterVec(historyParams+13,1) = normrnd(1,0.5);
+        parameterVec(historyParams+13,1) = normrnd(5,0.5);
         parameterVec(historyParams+14,1) = normrnd(1,0.5);
         parameterVec(historyParams+15,1) = normrnd(0,1);
         

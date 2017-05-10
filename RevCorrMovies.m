@@ -64,12 +64,12 @@ clear S S_f U V T u v t;
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
-totalUnits = sum(sum(temp));
+totalUnits = sum(sum(temp))-numChans;
 
 temp = cell(totalUnits,1);
 count = 1;
 for ii=1:numChans
-   for jj=1:nunits1
+   for jj=2:nunits1
        if isempty(allts{jj,Chans(ii)}) == 0
            temp{count} = allts{jj,Chans(ii)};
            count = count+1;
