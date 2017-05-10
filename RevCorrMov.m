@@ -241,7 +241,7 @@ for ii=startUnit:totalUnits
     constraints = [r(1:train);zeros(DIM(1)*DIM(2),1)];
     
     for lambda = 1:length(bigLambda)
-        fprintf('Lambda: %3.2e\n',bigLambda(lambda));
+%         fprintf('Lambda: %3.2e\n',bigLambda(lambda));
             % VERTICALLY CONCATENATE S and L
             % onScreenMovie is size numStimuli X effectivePixels
         for kk=1:kernelLenFull

@@ -5,22 +5,31 @@ fileName = {'13_05_22','13_05_20','13_05_19','13_05_14',...
     '13_04_29','13_04_26','13_04_21','13_04_17','13_04_16','13_04_14',...
     '13_04_05'};
 nExps = length(fileName);
-[csCaData, sParameters, tfImageStack] = ...
-   Load_Cossell_etal_2015_NaturalImageResponses(fileName);
 
-load('NaturalImageStack.mat');
-convertedStack = zeros(size(tfImageStack,3),size(tfImageStack,1)*size(tfImageStack,2));
-for ii=1:size(tfImageStack,3)
-   tempIm = tfImageStack(:,:,ii);
-   convertedStack(ii,:) = tempIm(:)';
-end
-
-unbiased_convertedStack = zeros(size(tfImageStack,3),size(tfImageStack,1)*size(tfImageStack,2));
-for ii=1:size(unbiasedImageStack,3)
-   tempIm = unbiasedImageStack(:,:,ii);
-   convertedStack(ii,:) = tempIm(:)';
-end
-
+ [csCaData, sParameters, tfImageStack] = ...
+     Load_Cossell_etal_2015_NaturalImageResponses(fileName);
+ 
+ load('NaturalImageStack.mat');
+ convertedStack = zeros(size(tfImageStack,3),size(tfImageStack,1)*size(tfImageStack,2));
+ for ii=1:size(tfImageStack,3)
+     tempIm = tfImageStack(:,:,ii);
+     convertedStack(ii,:) = tempIm(:)';
+ end
+ 
+%  unbiased_convertedStack = zeros(size(tfImageStack,3),size(tfImageStack,1)*size(tfImageStack,2));
+%  for ii=1:size(unbiasedImageStack,3)
+%      tempIm = unbiasedImageStack(:,:,ii);
+%      unbiased_convertedStack(ii,:) = tempIm(:)';
+%  end
+ 
+ unbiasedPink_convertedStack = zeros(size(tfImageStack,3),size(tfImageStack,1)*size(tfImageStack,2));
+ for ii=1:size(unbiasedPinkStack,3)
+     tempIm = unbiasedPinkStack(:,:,ii);
+     unbiasedPink_convertedStack(ii,:) = tempIm(:)';
+ end
+ 
+ clear tfImageStack unbiasedPinkStack unbiasedImageStack;
+ 
 for ii=1:nExps
     CaData = csCaData{ii};
     nImgPlanes = size(CaData,2);
@@ -38,7 +47,7 @@ for ii=1:nExps
         numIms = length(evokedSlots);
         reducedSpikeData = sum(spikeData(:,:,3:5),3)./3;
         
-        DIM = [size(tfImageStack,1),size(tfImageStack,2)];
+        
         L = zeros(DIM(1)*DIM(2),DIM(1)*DIM(2));
         bigCount = 1;
         for kk=1:DIM(2)
@@ -57,8 +66,7 @@ for ii=1:nExps
             end
         end
         
-        
-        bigLambda = logspace(3,7,15);
+        bigLambda = logspace(3,6,10);
         RMS = zeros(numNeurons,length(bigLambda));
         F = zeros(numNeurons,length(bigLambda),DIM(1)*DIM(2));
         
@@ -68,37 +76,54 @@ for ii=1:nExps
             constraints = [r;zeros(DIM(1)*DIM(2),1)];
             tempA = convertedStack(1:train,:);
             
+            rTest = reducedSpikeData(kk,evokedSlots(1)+train:evokedSlots(1)+numIms-1)';
+            testA = convertedStack(train+1:numIms,:);
             for ll=1:length(bigLambda)
                 A = [tempA;bigLambda(ll).*L];
-                F(kk,ll,:) = A\constraints;clear A;
-                rTest = reducedSpikeData(kk,evokedSlots(1)+train:evokedSlots(1)+numIms-1)';
-                A = convertedStack(train+1:numIms,:);
-                RMS(kk,ll) = norm(rTest-A*squeeze(F(kk,ll,:)))./sqrt(DIM(1)*DIM(2));
-                clear A;
+                F(kk,ll,:) = A\constraints;
+                
+                RMS(kk,ll) = norm(rTest-testA*squeeze(F(kk,ll,:)))./sqrt(DIM(1)*DIM(2));
             end
-             clear tempA A;
         end
         
-        RMS_Unbiased = zeros(numNeurons,length(bigLambda));
-        F_Unbiased = zeros(numNeurons,length(bigLambda),DIM(1)*DIM(2));
+%         bigLambda_Unbiased = logspace(0,3,15);
+%         RMS_Unbiased = zeros(numNeurons,length(bigLambda_Unbiased));
+%         F_Unbiased = zeros(numNeurons,length(bigLambda_Unbiased),DIM(1)*DIM(2));
+%         for kk=1:numNeurons
+%             r = reducedSpikeData(kk,evokedSlots(1):evokedSlots(1)+train-1)';
+%             constraints = [r;zeros(DIM(1)*DIM(2),1)];
+%             tempA = unbiased_convertedStack(1:train,:);
+%             
+%             rTest = reducedSpikeData(kk,evokedSlots(1)+train:evokedSlots(1)+numIms-1)';
+%             testA = unbiased_convertedStack(train+1:numIms,:);
+%             for ll=1:length(bigLambda_Unbiased)
+%                 A = [tempA;bigLambda_Unbiased(ll).*L];
+%                 F_Unbiased(kk,ll,:) = A\constraints;
+%                 
+%                 RMS_Unbiased(kk,ll) = norm(rTest-testA*squeeze(F_Unbiased(kk,ll,:)))./sqrt(DIM(1)*DIM(2));
+%             end
+%         end
+        
+        bigLambda_UnbiasedPink = logspace(2,5,10);
+        RMS_UnbiasedPink = zeros(numNeurons,length(bigLambda_UnbiasedPink));
+        F_UnbiasedPink = zeros(numNeurons,length(bigLambda_UnbiasedPink),DIM(1)*DIM(2));
         for kk=1:numNeurons
             r = reducedSpikeData(kk,evokedSlots(1):evokedSlots(1)+train-1)';
             constraints = [r;zeros(DIM(1)*DIM(2),1)];
-            tempA = unbiased_convertedStack(1:train,:);
+            tempA = unbiasedPink_convertedStack(1:train,:);
             
-            for ll=1:length(bigLambda)
-                A = [tempA;bigLambda(ll).*L];
-                F(kk,ll,:) = A\constraints;clear A;
-                rTest = reducedSpikeData(kk,evokedSlots(1)+train:evokedSlots(1)+numIms-1)';
-                A = unbiased_convertedStack(train+1:numIms,:);
-                RMS(kk,ll) = norm(rTest-A*squeeze(F(kk,ll,:)))./sqrt(DIM(1)*DIM(2));
-                clear A;
+            rTest = reducedSpikeData(kk,evokedSlots(1)+train:evokedSlots(1)+numIms-1)';
+            testA = unbiasedPink_convertedStack(train+1:numIms,:);
+            for ll=1:length(bigLambda_UnbiasedPink)
+                A = [tempA;bigLambda_UnbiasedPink(ll).*L];
+                F_UnbiasedPink(kk,ll,:) = A\constraints;
+                
+                RMS_UnbiasedPink(kk,ll) = norm(rTest-testA*squeeze(F_UnbiasedPink(kk,ll,:)))./sqrt(DIM(1)*DIM(2));
             end
-             clear tempA A;
         end
         
         newFileName = strcat(fileName{ii},'-',num2str(jj));
         save(newFileName,'F','bigLambda','DIM','RMS','reducedSpikeData',...
-            'RMS_Unbiased','F_Unbiased');
+            'RMS_UnbiasedPink','F_UnbiasedPink','bigLambda_UnbiasedPink');
     end
 end
