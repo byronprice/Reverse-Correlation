@@ -85,7 +85,7 @@ historyDesign = historyDesign(filterLen+1:end,:);
 numBasis = 10;
 basisFuns = zeros(historyParams,numBasis);
 centerPoints = linspace(1,historyParams,numBasis);
-basisStd = 0.5;
+basisStd = 1.5;
 for ii=1:numBasis
    time = 1:historyParams;
    temp = exp(-(time-centerPoints(ii)).^2./(2*basisStd^2));
@@ -108,11 +108,9 @@ ylabel('Firing Rate (Hz');xlabel('Lag (centisecs)');
 X = [ones(length(historyDesign),1),historyDesign];
 
 baseFiring = sum(y)/length(y);
-numIter = 5e4;burnIn = 1e4;numParams = historyParams+1;
+numIter = 2e5;burnIn = 5e4;numParams = historyParams+1;
 params = zeros(numParams,numIter);
 posteriorProb = zeros(numIter,1);
-
-mvNormPDF = @(x,mu,sigma) exp(-0.5.*(x-mu)'*inv(sigma)*(x-mu))./sqrt(det(2.*pi.*sigma));
 
 priorMu = zeros(numParams,1);
 priorSigma = diag(ones(numParams,1));
@@ -153,8 +151,8 @@ tempMu = X*params(:,1);
 prevLogLikelihood = sum(logPoissonPDF(y,tempMu));
 
 smoothPrior = L*params(2:end,1);
-prevLogPrior = log(mvNormPDF(params(:,1),priorMu,priorSigma))+...
-    log(mvNormPDF(smoothPrior,smoothPriorMu,smoothPriorSigma));
+prevLogPrior = log(mvnpdf(params(:,1)',priorMu',priorSigma))+...
+    log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
 
 posteriorProb(1) = prevLogLikelihood+prevLogPrior;
 
@@ -171,6 +169,8 @@ loglambda = log(2.38^2/numParams);
 updateMu = mvnrnd(priorMu,priorSigma)';
 optimalAccept = 0.234;
 
+% error = zeros(burnIn,1);
+% error(1) = mean(abs([log(baseRate);historyB]-updateMu));
 for ii=2:burnIn
 %     Z = mvnrnd(mu,sqrt(exp(loglambda))*sigma*sqrt(exp(loglambda)))';
     Z = mvnrnd(mu,exp(loglambda)*sigma)';
@@ -178,8 +178,8 @@ for ii=2:burnIn
     tempMu = X*pStar;
     pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
     smoothPrior = L*pStar(2:end);
-    pStarLogPrior = log(mvNormPDF(pStar,priorMu,priorSigma))+...
-        log(mvNormPDF(smoothPrior,smoothPriorMu,smoothPriorSigma));
+    pStarLogPrior = log(mvnpdf(pStar',priorMu',priorSigma))+...
+        log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
     
     logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
     
@@ -204,29 +204,30 @@ for ii=2:burnIn
 %         tempMu = X*pStar;
 %         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
 %         smoothPrior = L*pStar(2:end);
-%         pStarLogPrior = log(mvNormPDF(pStar,priorMu,priorSigma))+...
-%             log(mvNormPDF(smoothPrior,smoothPriorMu,smoothPriorSigma));
+%         pStarLogPrior = log(mvnpdf(pStar',priorMu',priorSigma))+...
+%             log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
 %         
 %         logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
 %         loglambda(jj,jj) = loglambda(jj,jj)+updateParam.*(exp(min(0,logA))-optimalAccept);
 %     end
 %     updateParam = updateParam*updateShift;
     
-%     error = mean(abs([log(baseRate);historyB]-updateMu));
+%     error(ii) = mean(abs([log(baseRate);historyB]-updateMu));
 %     scatter(ii,error);hold on;pause(0.01);
 %     subplot(2,1,1);scatter(ii,posteriorProb(ii));title(sprintf('%3.2f',sigma(1,1)));
 %     subplot(2,1,2);histogram(params(1,1:ii));pause(0.05);
 end
 
 sigma = exp(loglambda).*sigma;
+% sigma = sqrt(exp(loglambda))*sigma*sqrt(exp(loglambda));
 acceptRate = 0;
 for ii=burnIn+1:numIter
     pStar = params(:,ii-1)+mvnrnd(mu,sigma)';
     tempMu = X*pStar;
     pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
     smoothPrior = L*pStar(2:end);
-    pStarLogPrior = log(mvNormPDF(pStar,priorMu,priorSigma))+...
-        log(mvNormPDF(smoothPrior,smoothPriorMu,smoothPriorSigma));
+    pStarLogPrior = log(mvnpdf(pStar',priorMu',priorSigma))+...
+        log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
     
     logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
     
@@ -241,18 +242,18 @@ for ii=burnIn+1:numIter
     
 end
     
-% figure();autocorr(params(2,:),50);
-skipRate = 20;
+figure();autocorr(params(2,:),100);
+% figure();plot(error);
+skipRate = 100;
 fprintf('Final Acceptance Rate: %3.2f\n',acceptRate/(numIter-burnIn-1));
 posteriorSamples = params(:,burnIn+1:skipRate:end);
-figure();histogram(posteriorSamples(2,:));
+% figure();histogram(posteriorSamples(2,:));
 
 [~,ind] = max(posteriorProb);
 MAP = params(:,ind);
 posteriorMean = mean(posteriorSamples,2);
 posteriorMedian = median(posteriorSamples,2);
 
-sum(abs(MAP-posteriorMedian))
 alpha = 0.05;
 posteriorInterval = quantile(posteriorSamples,[alpha/2,1-alpha/2],2);
 
