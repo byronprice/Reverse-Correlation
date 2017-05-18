@@ -39,7 +39,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/04/11
+% Updated: 2017/05/18
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -82,7 +82,7 @@ conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
-screenPix_to_effPix = 30;
+screenPix_to_effPix = 10;
 maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 
@@ -122,29 +122,36 @@ for ii=1:numStimuli
 end
 S = uint8(S);
 
+wLow = round((w_pixels-maxPix)/2);
+wHigh = round(w_pixels-wLow);
+hLow = round((h_pixels-minPix)/2);
+hHigh = round(h_pixels-hLow);
+destRect = [wLow hLow wHigh hHigh];
+
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
 %flipIntervals = flipInterval;%+exprnd(0.1,[numStimuli,1]);
 WaitTimes = WaitTime+exprnd(0.2,[numStimuli,1]);
 
-usb.startRecording;
-WaitSecs(5);
+usb.startRecording;usb.strobeEventWord(0);
+WaitSecs(30);
 tt = 1;
 vbl = Screen('Flip',win);
 while tt <= numStimuli
     % Convert it to a texture 'tex':
     Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
-    Img = kron(double(Img),ones(screenPix_to_effPix));
     tex = Screen('MakeTexture',win,Img);
-    Screen('DrawTexture',win,tex);
+    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
+                                        % 1 is bilinear filter
     vbl = Screen('Flip',win);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
     Screen('Close',tex);
     tt = tt+1;
 end
-pause(1);
+Screen('Flip',win);usb.strobeEventWord(0);
+WaitSecs(30);
 usb.stopRecording;
 % Close window
 Screen('CloseAll');
@@ -155,7 +162,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
-    'conv_factor','WaitTimes','beta','spaceExp','DIM');
+    'conv_factor','WaitTimes','beta','spaceExp','DIM','spatialSampleFreq');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)

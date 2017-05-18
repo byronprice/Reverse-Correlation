@@ -29,7 +29,7 @@ function [] = Noise_Movie(AnimalName,NoiseType)
 %
 % Created: 2017/03/24, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/04/24
+% Updated: 2017/05/18
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -42,9 +42,10 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-movieNum = random('Discrete Uniform',100);
+% movieNum = random('Discrete Uniform',100);
+movieNum = 1;
 
-fileName = sprintf('15Min_PinkNoiseMovie%d.mat',movieNum);
+fileName = sprintf('5Min_PinkNoiseMovie%d.mat',movieNum);
 load(fileName);
 
 [vertPix,horzPix,numStimuli] = size(S);
@@ -83,7 +84,7 @@ ifi = Screen('GetFlipInterval', win);deltaIFI = ifi/2;
 % WaitTimes = WaitTime+exprnd(0.25,[numStimuli,1]);
 flipInterval = 1/movie_FrameRate-deltaIFI;
 
-usb.startRecording;
+usb.startRecording;usb.strobeEventWord(0);
 WaitSecs(30);
 tt = 1;
 vbl = Screen('Flip', win);
@@ -98,8 +99,24 @@ while tt <= numStimuli
     Screen('Close',tex);
     tt = tt+1;
 end
-Screen('Flip',win);
+Screen('Flip',win);usb.strobeEventWord(0);
 WaitSecs(30);
+
+tt = 1;
+vbl = Screen('Flip', win);
+while tt <= numStimuli
+%     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
+    % Img = S(:,:,tt);Img = Img(newInds);
+    % Convert it to a texture 'tex':
+    tex = Screen('MakeTexture',win,S(:,:,tt));
+    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
+                                        % 1 is bilinear filter
+    vbl = Screen('Flip',win,vbl+flipInterval);usb.strobe;
+    Screen('Close',tex);
+    tt = tt+1;
+end
+Screen('Flip',win);usb.strobeEventWord(0);
+WaitSecs(5);
 usb.stopRecording;
 % Close window
 Screen('CloseAll');
