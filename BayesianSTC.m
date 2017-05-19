@@ -61,7 +61,7 @@ baseRate = 5/100;
 historyLen = length(historyB);
 y(1:filterLen) = poissrnd(baseRate,[filterLen,1]);
 currentHistory = fliplr(y(filterLen-historyLen+1:filterLen)');
-A = 3;B = 12;C = 0.5;
+A = 3.5;B = 13;C = 0.5;
 
 startTime = filterLen+1;
 for ii=startTime:totalCentisecs
@@ -108,23 +108,37 @@ numSpikes = length(spikeTimes);
 for ii=1:numSpikes
    tempInds = onScreenStims(spikeTimes(ii),:);
    movie = unbiasedS(1:end-30,35:end-35,tempInds);
-   STA = STA+y(ii).*movie(:);
+   STA = STA+y(spikeTimes(ii)).*movie(:);
 end
-STA = STA./sum(y);
+STA = STA./numSpikes;
 
 clearvars -except numSpikes STA spikeTimes unbiasedS onScreenStims y;
 STC = zeros(length(STA),length(STA),'single');
+phi = zeros(length(STA),length(STA),'single');
 
 for ii=1:numSpikes
-    tempInds = onScreenStims(spikeTimes(ii),1:2:end);
+    tempInds = onScreenStims(spikeTimes(ii),:);
     movie = unbiasedS(1:end-30,35:end-35,tempInds);
     STC = STC+(movie(:)-STA)*(movie(:)-STA)';
 end
 STC = STC./numSpikes;
-[V,D] = eig(STC);
 
-figure();plot(diag(D));
-figure();histogram(STA);
+numBins = length(onScreenStims);
+movieMean = mean(unbiasedS(:));
+for ii=1:numBins
+    tempInds = onScreenStims(ii,:);
+    movie = unbiasedS(1:end-30,35:end-35,tempInds);
+    phi = phi+(movie(:)-movieMean)*(movie(:)-movieMean)';
+end
+phi = phi./numBins;figure();imagesc(phi);
+
+C = inv(phi)-inv(STC);
+b = STC\STA;
+a = log(numSpikes/numBins*sqrt(det(phi/STC)))-0.5.*STA'*inv(phi)*inv(STC)*STA;
+% [V,D] = eig(STC);
+% 
+% figure();plot(diag(D));
+% figure();histogram(STA);
 
 % for a quadratic LNP model of spiking activity
 %   f(x) = exp(0.5*x'*C*x+b'*x+a);

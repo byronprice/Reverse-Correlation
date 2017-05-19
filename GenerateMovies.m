@@ -1,6 +1,6 @@
 % GenerateMovies.m
 
-for jj=1
+for jj=2:100
     beta = -3;spaceExp = 2;timeExp = 2;
     movie_FrameRate = 60; % hz
     movieTime_Seconds = 5*60;
