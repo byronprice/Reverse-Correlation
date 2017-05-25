@@ -50,7 +50,10 @@ convResult = zeros(totalCentisecs,1);
 y = zeros(totalCentisecs,1); % neural response
 
 sigmoid = @(x,A,B,C) A.*exp((x-B).*C)./(1+exp((x-B).*C));
-historyB = [-2,-1,-0.3,-0.1,0,0.1,0.3,0.4,0.3,0.25,0.2,0.15,0.1,0.05,0.025,0,0,0,0,0]';
+x = 1:10:150;
+historyB = sin((x'/3-15)/10);
+historyB(1) = -2;historyB(2) = -1.5;historyB(3) = -1;historyB(4) = -0.5;
+% historyB = [-2,-1,-0.3,-0.1,0,0.1,0.3,0.4,0.3,0.25,0.2,0.15,0.1,0.05,0.025,0,0,0,0,0]';
 baseRate = 5/100;
 
 historyLen = length(historyB);
@@ -102,34 +105,33 @@ ytrue = ytrue*100;yhat = yhat*100;dylo = dylo*100;dyhi = dyhi*100;
 figure(1);subplot(2,1,1);
 boundedline(1:historyParams,yhat,[dylo,dyhi],'c');hold on;plot(ytrue,'r','LineWidth',2);
 title('GLM Fit, with 95% Confidence Interval');legend('ML','True Values');
-ylabel('Firing Rate (Hz');xlabel('Lag (centisecs)');
+ylabel('Firing Rate (Hz)');xlabel('Lag (centisecs)');
 
 % INTIALIZE VARIABLES AND PRIORS FOR MCMC
 X = [ones(length(historyDesign),1),historyDesign];
 
 baseFiring = sum(y)/length(y);
-numIter = 2e5;burnIn = 5e4;numParams = historyParams+1;
+numIter = 5.5e5;burnIn = 5e4;numParams = historyParams+3;
 params = zeros(numParams,numIter);
 posteriorProb = zeros(numIter,1);
 
-priorMu = zeros(numParams,1);
-priorSigma = diag(ones(numParams,1));
+priorMu = zeros(numParams-2,1)';
 priorMu(1) = log(baseFiring);
-priorSigma(1,1) = 2;
-for ii=2:numParams
+
+for ii=2:numParams-2
    priorMu(ii) = 0;
-   priorSigma(ii,ii) = 2;
 end
+priorSigma = eye(numParams-2);
 
-smoothPriorMu = zeros(numParams-1,1);
-smoothPriorSigma = zeros(numParams-1,numParams-1);
-beta = 1;
+smoothPriorMu = zeros(numParams-3,1)';
+smoothPriorSigma = eye(numParams-3);
 
-for ii=1:numParams-1
-    smoothPriorSigma(ii,ii) = beta;
-end
+alpha = 1e3;beta = 1e3;
+a=1e-3;b=1e3;
 
-params(:,1) = mvnrnd(priorMu,priorSigma)';
+params(1:end-2,1) = mvnrnd(priorMu,eye(numParams-2))';
+params(end-1,1) = alpha;
+params(end,1) = beta;
 
 logPoissonPDF = @(y,mu) y.*mu-exp(mu);
 % calculate likelihood
@@ -147,12 +149,13 @@ for ii=1:historyParams
    end
 end
 
-tempMu = X*params(:,1);
+tempMu = X*params(1:end-2,1);
 prevLogLikelihood = sum(logPoissonPDF(y,tempMu));
 
-smoothPrior = L*params(2:end,1);
-prevLogPrior = log(mvnpdf(params(:,1)',priorMu',priorSigma))+...
-    log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
+smoothPrior = L*params(2:end-2,1);
+prevLogPrior = log(mvnpdf(params(1:end-2,1)',priorMu,params(end-1,1).*priorSigma))+...
+   log(mvnpdf(smoothPrior',smoothPriorMu,params(end,1).*smoothPriorSigma))+...
+   sum(log(gampdf(1./params(end-1:end,1),a,b)));
 
 posteriorProb(1) = prevLogLikelihood+prevLogPrior;
 
@@ -161,13 +164,15 @@ posteriorProb(1) = prevLogLikelihood+prevLogPrior;
 % figure();scatter(1,0.1);pause(0.1);hold on;
 
 % FOR AUTOMATIC CREATION OF UPDATE MATRIX
-updateParam = 1e-3;%temp = logspace(-1,-6,burnIn);
+updateParam = 1e-2;%temp = logspace(-1,-6,burnIn);
 % updateShift = temp(2)/temp(1);clear temp;
-mu = zeros(numParams,1);sigma = priorSigma;
+mu = zeros(numParams,1);sigma = eye(numParams);
 % loglambda = log(2.38^2/numParams).*diag(ones(numParams,1));
 loglambda = log(2.38^2/numParams);
-updateMu = mvnrnd(priorMu,priorSigma)';
-optimalAccept = 0.234;
+updateMu = zeros(numParams,1);
+updateMu(1:end-2) = mvnrnd(priorMu,priorSigma)';
+updateMu(end-1) = 1.5e3;updateMu(end) = 1.5e3;
+optimalAccept = 0.44;%0.234;
 
 % error = zeros(burnIn,1);
 % error(1) = mean(abs([log(baseRate);historyB]-updateMu));
@@ -175,12 +180,13 @@ for ii=2:burnIn
 %     Z = mvnrnd(mu,sqrt(exp(loglambda))*sigma*sqrt(exp(loglambda)))';
     Z = mvnrnd(mu,exp(loglambda)*sigma)';
     pStar = params(:,ii-1)+Z;
-    tempMu = X*pStar;
+    tempMu = X*pStar(1:end-2);
     pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
-    smoothPrior = L*pStar(2:end);
-    pStarLogPrior = log(mvnpdf(pStar',priorMu',priorSigma))+...
-        log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
+    smoothPrior = L*pStar(2:end-2);
     
+    pStarLogPrior = log(mvnpdf(pStar(1:end-2)',priorMu,pStar(end-1).*priorSigma))+...
+        log(mvnpdf(smoothPrior',smoothPriorMu,pStar(end).*smoothPriorSigma))+...
+        sum(log(gampdf(1./pStar(end-1:end),a,b)));
     logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
     
     if log(rand) < logA
@@ -196,21 +202,7 @@ for ii=2:burnIn
         (params(:,ii)-updateMu)'-sigma);
     updateMu = updateMu+updateParam.*(params(:,ii)-updateMu);
     loglambda = loglambda+updateParam.*(exp(min(0,logA))-optimalAccept);
-    
-%     for jj=1:numParams
-%         myVec = zeros(numParams,1);myVec(jj) = 1;
-%         
-%         pStar = params(:,ii-1)+Z.*myVec;
-%         tempMu = X*pStar;
-%         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
-%         smoothPrior = L*pStar(2:end);
-%         pStarLogPrior = log(mvnpdf(pStar',priorMu',priorSigma))+...
-%             log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
-%         
-%         logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
-%         loglambda(jj,jj) = loglambda(jj,jj)+updateParam.*(exp(min(0,logA))-optimalAccept);
-%     end
-%     updateParam = updateParam*updateShift;
+%     scatter(ii,posteriorProb(ii));hold on;pause(0.01);
     
 %     error(ii) = mean(abs([log(baseRate);historyB]-updateMu));
 %     scatter(ii,error);hold on;pause(0.01);
@@ -223,13 +215,15 @@ sigma = exp(loglambda).*sigma;
 acceptRate = 0;
 for ii=burnIn+1:numIter
     pStar = params(:,ii-1)+mvnrnd(mu,sigma)';
-    tempMu = X*pStar;
+    tempMu = X*pStar(1:end-2);
     pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
-    smoothPrior = L*pStar(2:end);
-    pStarLogPrior = log(mvnpdf(pStar',priorMu',priorSigma))+...
-        log(mvnpdf(smoothPrior',smoothPriorMu',smoothPriorSigma));
+    smoothPrior = L*pStar(2:end-2);
     
+    pStarLogPrior = log(mvnpdf(pStar(1:end-2)',priorMu,pStar(end-1).*priorSigma))+...
+        log(mvnpdf(smoothPrior',smoothPriorMu,pStar(end).*smoothPriorSigma))+...
+        sum(log(gampdf(1./pStar(end-1:end),a,b)));
     logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
+    
     
     if log(rand) < logA
         params(:,ii) = pStar;
