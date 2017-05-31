@@ -56,7 +56,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-TimeEstimate = numStimuli*(flipInterval+0.1+WaitTime+0.2)/60;
+TimeEstimate = numStimuli*(flipInterval+WaitTime+0.2)/60;
 fprintf('\nEstimated time is %3.2f minutes.',TimeEstimate);
 WaitSecs(5);
 
@@ -131,7 +131,7 @@ destRect = [wLow hLow wHigh hHigh];
 Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
-%flipIntervals = flipInterval;%+exprnd(0.1,[numStimuli,1]);
+
 WaitTimes = WaitTime+exprnd(0.2,[numStimuli,1]);
 
 usb.startRecording;usb.strobeEventWord(0);
@@ -144,8 +144,8 @@ while tt <= numStimuli
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
                                         % 1 is bilinear filter
-    vbl = Screen('Flip',win);usb.strobe;
-    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobe;
+    vbl = Screen('Flip',win);usb.strobeEventWord(1);
+    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobeEventWord(2);
     vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
     Screen('Close',tex);
     tt = tt+1;
