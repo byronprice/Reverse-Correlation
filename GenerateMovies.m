@@ -1,6 +1,6 @@
 % GenerateMovies.m
 
-for jj=2:100
+for jj=12:100
     beta = -3;spaceExp = 2;timeExp = 2;
     movie_FrameRate = 60; % hz
     movieTime_Seconds = 5*60;
@@ -62,7 +62,8 @@ for jj=2:100
     fileName = sprintf('5Min_UnbiasedPinkNoiseMovie%d.mat',jj);
     save(fileName,'unbiasedS','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
         'movieTime_Seconds','mmPerPixel','DIM');
-
+    
+    pause(2);clearvars -except jj;pause(2);
 end
 % from Dong 2001 ... Spatiotemporal Inseparability of Natural Images and
 %   Visual Sensitivities

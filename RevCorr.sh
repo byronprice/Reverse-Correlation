@@ -7,6 +7,9 @@
 #$ -o RevCorrOutput.txt
 #$ -l mem_per_core=16G
 #$ -pe omp 8
+#$ -m ea
+#$ -M byron.h.price@gmail.com
+
 
 module load matlab/2017a
 
