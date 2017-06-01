@@ -237,7 +237,6 @@ for ii=2:burnIn
 %     error(ii) = mean(abs([log(baseRate);historyB]-updateMu));
 %     scatter(ii,error);hold on;pause(0.01);
 end
-figure();plot(updateMu)
 % sigma = exp(loglambda).*sigma;
 acceptRate = 0;
 for ii=burnIn+1:numIter
@@ -276,7 +275,7 @@ end
     
 figure();autocorr(params(2,burnIn+1:end),500);
 % figure();plot(error);
-skipRate = 200;
+skipRate = 500;
 fprintf('Final Acceptance Rate: %3.2f\n',acceptRate/(numIter-burnIn-1));
 posteriorSamples = params(:,burnIn+1:skipRate:end);
 % figure();histogram(posteriorSamples(2,:));
