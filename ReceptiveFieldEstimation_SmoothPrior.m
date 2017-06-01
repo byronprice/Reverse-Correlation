@@ -129,7 +129,7 @@ priorSigma = eye(numParams-2);
 smoothPriorMu = zeros(numParams-3,1);
 smoothPriorSigma = eye(numParams-3);
 
-alpha = 5;beta = 4;
+alpha = 1;beta = 1;
 abprior1=1e-3;abprior2=1e3;
 
 params(1:end-2,1) = mvnrnd(priorMu,eye(numParams-2))';
@@ -237,6 +237,7 @@ for ii=2:burnIn
 %     scatter(ii,error);hold on;pause(0.01);
 end
 % sigma = exp(loglambda).*sigma;
+% p = linspace(1,0,numParams);p = p./sum(p);
 acceptRate = 0;
 for ii=burnIn+1:numIter
     index = find(mnrnd(1,p)==1);
