@@ -7,10 +7,10 @@ xaxis = linspace(-maxPix/2,maxPix/2,DIM(2));
 yaxis = linspace(-minPix/4,3*minPix/4,DIM(1));
 
 %S = normrnd(0,1,[N,N,numStimuli]);
+timeMultiplier = 100;
+totalCentisecs = 1*60*timeMultiplier;
 
-totalCentisecs = 1*60*100;
-
-stimTimes = round((0:1/60:5*60-1/60).*100);
+stimTimes = round((0:1/60:5*60-1/60).*timeMultiplier);
 pointProcessStimTimes = zeros(totalCentisecs,1);
 for ii=1:numStimuli-1
     pointProcessStimTimes(stimTimes(ii)+1:stimTimes(ii+1)) = ii;
@@ -54,7 +54,7 @@ x = 1:10:150;
 historyB = sin((x'/3-15)/10);
 historyB(1) = -2;historyB(2) = -1.5;historyB(3) = -1;historyB(4) = -0.5;
 % historyB = [-2,-1,-0.3,-0.1,0,0.1,0.3,0.4,0.3,0.25,0.2,0.15,0.1,0.05,0.025,0,0,0,0,0]';
-baseRate = 5/100;
+baseRate = 5/timeMultiplier;
 
 historyLen = length(historyB);
 y(1:filterLen) = poissrnd(baseRate,[filterLen,1]);
@@ -101,7 +101,8 @@ X = historyDesign*basisFuns;
 [yhat,dylo,dyhi] = glmval(b,basisFuns,'log',stats);
 ytrue = baseRate*exp(historyB);
 
-ytrue = ytrue*100;yhat = yhat*100;dylo = dylo*100;dyhi = dyhi*100;
+ytrue = ytrue*timeMultiplier;yhat = yhat*timeMultiplier;
+dylo = dylo*timeMultiplier;dyhi = dyhi*timeMultiplier;
 figure(1);subplot(2,1,1);
 boundedline(1:historyParams,yhat,[dylo,dyhi],'c');hold on;plot(ytrue,'r','LineWidth',2);
 title('GLM Fit, with 95% Confidence Interval');legend('ML','True Values');
@@ -113,7 +114,7 @@ X = [ones(length(historyDesign),1),historyDesign];
 % historyParams = numBasis;
 
 baseFiring = sum(y)/length(y);
-numIter = 5.5e5;burnIn = 5e4;numParams = historyParams+3;
+numIter = 1.05e6;burnIn = 5e4;numParams = historyParams+3;
 params = zeros(numParams,numIter);
 posteriorProb = zeros(numIter,1);
 
@@ -136,27 +137,25 @@ params(end-1,1) = log(alpha);
 params(end,1) = log(beta);
 
 logPoissonPDF = @(y,mu) y.*mu-exp(mu);
-% calculate likelihood
-spikeTimes = find(y==1);
 
-L = zeros(historyParams+2,historyParams+2);
-
-for ii=1:historyParams
-   if ii>1 && ii<historyParams
-       L(ii,ii-1:ii+1) = [1,-2,1];
-   elseif ii==1
-       L(ii,1) = -1;L(ii,2) = 1;
-   elseif ii==historyParams
-       L(ii,end-1) = 1;L(ii,end) = -1;
-   end
-end
+% L = zeros(historyParams+2,historyParams+2);
+% 
+% for ii=1:historyParams
+%    if ii>1 && ii<historyParams
+%        L(ii,ii-1:ii+1) = [1,-2,1];
+%    elseif ii==1
+%        L(ii,1) = -1;L(ii,2) = 1;
+%    elseif ii==historyParams
+%        L(ii,end-1) = 1;L(ii,end) = -1;
+%    end
+% end
 
 tempMu = X*params(1:end-2,1);
 prevLogLikelihood = sum(logPoissonPDF(y,tempMu));
 
-smoothPrior = L*[params(2,1);params(2:end-2,1);params(end-2,1)];
+smoothPrior = del2(params(2:end-2,1));
 prevLogPrior = log(mvnpdf(params(1:end-2,1),priorMu,(1/exp(params(end-1,1))).*priorSigma))+...
-   log(mvnpdf(smoothPrior(2:end-1),smoothPriorMu,(1/exp(params(end,1))).*smoothPriorSigma))+...
+   log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(params(end,1))).*smoothPriorSigma))+...
    sum(log(gampdf(exp(params(end-1:end,1)),abprior1,abprior2)));
 
 posteriorProb(1) = prevLogLikelihood+prevLogPrior;
@@ -175,7 +174,7 @@ optimalAccept = 0.234;
 
 sigma = eye(numParams);identity = eye(numParams);
 mu = zeros(numParams,1);
-q = numParams;
+q = numParams-2;
 W = normrnd(0,1,[numParams,q]);
 eigenvals = zeros(q,1);
 
@@ -183,7 +182,7 @@ for jj=1:q
     W(:,jj) = W(:,jj)./norm(W(:,jj));
     eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
 end
-p = ones(numParams,1)./numParams;
+p = ones(q,1)./q;
 % figure(2);scatter(1,posteriorProb(1));hold on;pause(0.1);
 for ii=2:burnIn
     index = find(mnrnd(1,p)==1);
@@ -194,10 +193,10 @@ for ii=2:burnIn
     if sum(pStar(end-1:end)<=-20) == 0
         tempMu = X*pStar(1:end-2);
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
-        smoothPrior = L*[pStar(2);pStar(2:end-2);pStar(end-2)];
+        smoothPrior = del2(pStar(2:end-2));
         
         pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
-            log(mvnpdf(smoothPrior(2:end-1),smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
+            log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
             sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
         logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
         
@@ -248,10 +247,10 @@ for ii=burnIn+1:numIter
     if sum(pStar(end-1:end)<=-20) == 0
         tempMu = X*pStar(1:end-2);
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
-        smoothPrior = L*[pStar(2);pStar(2:end-2);pStar(end-2)];
+        smoothPrior = del2(pStar(2:end-2));
         
         pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
-            log(mvnpdf(smoothPrior(2:end-1),smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
+            log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
             sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
         logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
         
@@ -273,9 +272,8 @@ for ii=burnIn+1:numIter
     loglambda(index) = lambda;
 end
     
-figure();autocorr(params(2,burnIn+1:end),500);
 % figure();plot(error);
-skipRate = 500;
+skipRate = 1000;
 fprintf('Final Acceptance Rate: %3.2f\n',acceptRate/(numIter-burnIn-1));
 posteriorSamples = params(:,burnIn+1:skipRate:end);
 % figure();histogram(posteriorSamples(2,:));
