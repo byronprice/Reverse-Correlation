@@ -7,10 +7,10 @@ xaxis = linspace(-maxPix/2,maxPix/2,DIM(2));
 yaxis = linspace(-minPix/4,3*minPix/4,DIM(1));
 
 %S = normrnd(0,1,[N,N,numStimuli]);
+timeMultiplier = 100;
+totalCentisecs = 1*60*timeMultiplier;
 
-totalCentisecs = 1*60*100;
-
-stimTimes = round((0:1/60:5*60-1/60).*100);
+stimTimes = round((0:1/60:5*60-1/60).*timeMultiplier);
 pointProcessStimTimes = zeros(totalCentisecs,1);
 for ii=1:numStimuli-1
     pointProcessStimTimes(stimTimes(ii)+1:stimTimes(ii+1)) = ii;
@@ -54,7 +54,7 @@ x = 1:10:150;
 historyB = sin((x'/3-15)/10);
 historyB(1) = -2;historyB(2) = -1.5;historyB(3) = -1;historyB(4) = -0.5;
 % historyB = [-2,-1,-0.3,-0.1,0,0.1,0.3,0.4,0.3,0.25,0.2,0.15,0.1,0.05,0.025,0,0,0,0,0]';
-baseRate = 5/100;
+baseRate = 5/timeMultiplier;
 
 historyLen = length(historyB);
 y(1:filterLen) = poissrnd(baseRate,[filterLen,1]);
@@ -101,7 +101,8 @@ X = historyDesign*basisFuns;
 [yhat,dylo,dyhi] = glmval(b,basisFuns,'log',stats);
 ytrue = baseRate*exp(historyB);
 
-ytrue = ytrue*100;yhat = yhat*100;dylo = dylo*100;dyhi = dyhi*100;
+ytrue = ytrue*timeMultiplier;yhat = yhat*timeMultiplier;
+dylo = dylo*timeMultiplier;dyhi = dyhi*timeMultiplier;
 figure(1);subplot(2,1,1);
 boundedline(1:historyParams,yhat,[dylo,dyhi],'c');hold on;plot(ytrue,'r','LineWidth',2);
 title('GLM Fit, with 95% Confidence Interval');legend('ML','True Values');
@@ -128,7 +129,7 @@ priorSigma = eye(numParams-2);
 smoothPriorMu = zeros(numParams-3,1);
 smoothPriorSigma = eye(numParams-3);
 
-alpha = 5;beta = 4;
+alpha = 1;beta = 1;
 abprior1=1e-3;abprior2=1e3;
 
 params(1:end-2,1) = mvnrnd(priorMu,eye(numParams-2))';
@@ -238,6 +239,7 @@ for ii=2:burnIn
 %     scatter(ii,error);hold on;pause(0.01);
 end
 % sigma = exp(loglambda).*sigma;
+% p = linspace(1,0,numParams);p = p./sum(p);
 acceptRate = 0;
 for ii=burnIn+1:numIter
     index = find(mnrnd(1,p)==1);
