@@ -120,9 +120,9 @@ posteriorProb = zeros(numIter,1);
 priorMu = zeros(numParams-2,1);
 priorMu(1) = log(baseFiring);
 
-for ii=2:numParams-2
-   priorMu(ii) = 0;
-end
+% for ii=2:numParams-2
+%    priorMu(ii) = 0;
+% end
 priorSigma = eye(numParams-2);
 
 smoothPriorMu = zeros(numParams-3,1);
@@ -171,21 +171,21 @@ loglambda = ones(numParams,1).*log(2.38^2);
 updateMu = zeros(numParams,1);
 updateMu(1:end-2) = mvnrnd(priorMu,priorSigma)';
 updateMu(end-1) = log(1.5);updateMu(end) = log(1.5);
-optimalAccept = 0.44;%0.234
+optimalAccept = 0.234;
 
 sigma = eye(numParams);identity = eye(numParams);
 mu = zeros(numParams,1);
-W = normrnd(0,1,[numParams,numParams]);
-eigenvals = zeros(numParams,1);
+q = numParams;
+W = normrnd(0,1,[numParams,q]);
+eigenvals = zeros(q,1);
 
-for jj=1:numParams
+for jj=1:q
     W(:,jj) = W(:,jj)./norm(W(:,jj));
     eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
 end
-
+p = ones(numParams,1)./numParams;
 % figure(2);scatter(1,posteriorProb(1));hold on;pause(0.1);
 for ii=2:burnIn
-    p = eigenvals./sum(eigenvals);
     index = find(mnrnd(1,p)==1);
     lambda = loglambda(index);
     stdev = sqrt(exp(lambda).*eigenvals(index));
@@ -198,7 +198,7 @@ for ii=2:burnIn
         
         pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
             log(mvnpdf(smoothPrior(2:end-1),smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
-            sum(log(gampdf(1./exp(pStar(end-1:end)),abprior1,abprior2)));
+            sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
         logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
         
         if log(rand) < logA
@@ -211,23 +211,20 @@ for ii=2:burnIn
         
         meanSubtract = params(:,ii)-updateMu;
         updateMu = updateMu+updateParam.*meanSubtract;
-        sigma = sigma+updateParam.*(meanSubtract*meanSubtract'-sigma);
-        sigma(1:(numParams+1):end) = max(sigma(1:(numParams+1):end),0);
-        
+%         sigma = sigma+updateParam.*(meanSubtract*meanSubtract'-sigma);
+        halfSigma = cholcov(sigma);
+        halfSigma = halfSigma+updateParam.*(triu((halfSigma^-1)*(sigma+meanSubtract*...
+            meanSubtract')*((halfSigma^-1)')-identity)-halfSigma);
+        sigma = halfSigma'*halfSigma;
         
          Z = pinv(tril(W'*W)')'*W';
          upperInverse = pinv(triu(Z*sigma*Z'));
          W = sigma*Z'*upperInverse;
          
-         for jj=1:numParams
+         for jj=1:q
             W(:,jj) = W(:,jj)./norm(W(:,jj));
             eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
          end
-        
-         for jj=1:numParams
-            W(:,jj) = W(:,jj)./norm(W(:,jj));
-            eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
-        end
          
         lambda = lambda+updateParam.*(exp(min(0,logA))-optimalAccept);
     else
@@ -240,15 +237,14 @@ for ii=2:burnIn
 %     error(ii) = mean(abs([log(baseRate);historyB]-updateMu));
 %     scatter(ii,error);hold on;pause(0.01);
 end
-
-p = eigenvals./sum(eigenvals);
+figure();plot(updateMu)
 % sigma = exp(loglambda).*sigma;
 acceptRate = 0;
 for ii=burnIn+1:numIter
     index = find(mnrnd(1,p)==1);
     lambda = loglambda(index);
     stdev = sqrt(exp(lambda).*eigenvals(index));
-    pStar = params(:,ii-1)+W*normrnd(0,stdev);
+    pStar = params(:,ii-1)+W(:,index)*normrnd(0,stdev);
     
     if sum(pStar(end-1:end)<=-20) == 0
         tempMu = X*pStar(1:end-2);
@@ -275,14 +271,14 @@ for ii=burnIn+1:numIter
         posteriorProb(ii) = posteriorProb(ii-1);
         lambda = lambda+updateParam.*(-optimalAccept);
     end
-    loglambda(eigenval==1) = lambda;
+    loglambda(index) = lambda;
 end
     
-figure();autocorr(params(2,2*burnIn:end),500);
+figure();autocorr(params(2,burnIn+1:end),500);
 % figure();plot(error);
 skipRate = 200;
 fprintf('Final Acceptance Rate: %3.2f\n',acceptRate/(numIter-burnIn-1));
-posteriorSamples = params(:,2*burnIn+1:skipRate:end);
+posteriorSamples = params(:,burnIn+1:skipRate:end);
 % figure();histogram(posteriorSamples(2,:));
 
 [~,ind] = max(posteriorProb);
