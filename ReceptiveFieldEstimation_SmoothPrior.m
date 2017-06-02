@@ -105,7 +105,7 @@ ytrue = ytrue*timeMultiplier;yhat = yhat*timeMultiplier;
 dylo = dylo*timeMultiplier;dyhi = dyhi*timeMultiplier;
 figure(1);subplot(2,1,1);
 boundedline(1:historyParams,yhat,[dylo,dyhi],'c');hold on;plot(ytrue,'r','LineWidth',2);
-title('GLM Fit, with 95% Confidence Interval');legend('ML','True Values');
+title('GLM Fit, with 95% Confidence Interval');legend('ML 95%','ML Est','True Values');
 ylabel('Firing Rate (Hz)');xlabel('Lag (centisecs)');
 
 % INTIALIZE VARIABLES AND PRIORS FOR MCMC
@@ -195,9 +195,13 @@ for ii=2:burnIn
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
         smoothPrior = del2(pStar(2:end-2));
         
-        pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
-            log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
-            sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
+        beta = exp(pStar(end));alpha = exp(pStar(end-1));
+        pStarLogPrior = ((historyParams+1)/2)*log(alpha)-0.5*alpha*(pStar(1:end-2)'*pStar(1:end-2))+...
+            ((historyParams)/2)*log(beta)-0.5*beta*(smoothPrior'*smoothPrior)+...
+            sum(log(gampdf([alpha,beta],abprior1,abprior2)));
+%         pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
+%             log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
+%             sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
         logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
         
         if log(rand) < logA
@@ -250,9 +254,13 @@ for ii=burnIn+1:numIter
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
         smoothPrior = del2(pStar(2:end-2));
         
-        pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
-            log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
-            sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
+        beta = exp(pStar(end));alpha = exp(pStar(end-1));
+        pStarLogPrior = ((historyParams+1)/2)*log(alpha)-0.5*alpha*(pStar(1:end-2)'*pStar(1:end-2))+...
+            ((historyParams)/2)*log(beta)-0.5*beta*(smoothPrior'*smoothPrior)+...
+            sum(log(gampdf([alpha,beta],abprior1,abprior2)));
+%         pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
+%             log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
+%             sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
         logA = (pStarLogLikelihood+pStarLogPrior)-posteriorProb(ii-1);
         
         
@@ -293,14 +301,14 @@ legend('True Values','ML','MAP','Location','northwest');
 title('History-Dependent Point Process Model Comparison');
 
 figure(1);subplot(2,1,2);
-temp = baseRate.*100.*exp(posteriorMedian(2:end-2));
+temp = baseRate.*100.*exp(posteriorMean(2:end-2));
 temp1 = baseRate.*100.*exp(posteriorInterval(2:end-2,1));
 temp2 = baseRate.*100.*exp(posteriorInterval(2:end-2,2));
 boundedline(1:length(historyB),temp,...
     [temp-temp1,temp2-temp]);
 hold on;plot(baseRate*100*exp(historyB),'r','LineWidth',2);
 title('Posterior Median, with 95% Posterior Interval');
-legend('Bayes','True Values');ylabel('Firing Rate (Hz)');
+legend('Bayes 95%','Bayes Mean','True Values');ylabel('Firing Rate (Hz)');
 xlabel('Lag (centisecs)');
 
 totalErrorGLM = mean(abs([log(baseRate),historyB']-[b(1),b(2:end)'*basisFuns']));
