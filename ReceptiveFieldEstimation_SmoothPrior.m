@@ -114,17 +114,15 @@ X = [ones(length(historyDesign),1),historyDesign];
 % historyParams = numBasis;
 
 baseFiring = sum(y)/length(y);
-numIter = 1.05e6;burnIn = 5e4;numParams = historyParams+3;
+numIter = 1.05e6;burnIn = 2e4;numParams = historyParams+3;
 params = zeros(numParams,numIter);
 posteriorProb = zeros(numIter,1);
 
-priorMu = zeros(numParams-2,1);
-priorMu(1) = log(baseFiring);
+priorMu = log(baseFiring);
 
 % for ii=2:numParams-2
 %    priorMu(ii) = 0;
 % end
-priorSigma = eye(numParams-2);
 
 smoothPriorMu = zeros(numParams-3,1);
 smoothPriorSigma = eye(numParams-3);
@@ -132,11 +130,12 @@ smoothPriorSigma = eye(numParams-3);
 alpha = 1;beta = 1;
 abprior1=1e-3;abprior2=1e3;
 
-params(1:end-2,1) = mvnrnd(priorMu,eye(numParams-2))';
+params(1:end-2,1) = mvnrnd([priorMu;zeros(historyParams,1)],eye(numParams-2))';
 params(end-1,1) = log(alpha);
 params(end,1) = log(beta);
 
 logPoissonPDF = @(y,mu) y.*mu-exp(mu);
+logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
 
 % L = zeros(historyParams+2,historyParams+2);
 % 
@@ -154,9 +153,10 @@ tempMu = X*params(1:end-2,1);
 prevLogLikelihood = sum(logPoissonPDF(y,tempMu));
 
 smoothPrior = del2(params(2:end-2,1));
-prevLogPrior = log(mvnpdf(params(1:end-2,1),priorMu,(1/exp(params(end-1,1))).*priorSigma))+...
-   log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(params(end,1))).*smoothPriorSigma))+...
-   sum(log(gampdf(exp(params(end-1:end,1)),abprior1,abprior2)));
+prevLogPrior = ((historyParams)/2)*log(alpha)-0.5*alpha*(params(2:end-2,1)'*params(2:end-2,1))+...
+            0.5*log(alpha)-0.5*alpha*(params(1,1)-priorMu)^2+...
+            ((historyParams)/2)*log(beta)-0.5*beta*(smoothPrior'*smoothPrior)+...
+            sum(logGammaPDF([alpha,beta],abprior1,abprior2));
 
 posteriorProb(1) = prevLogLikelihood+prevLogPrior;
 
@@ -165,23 +165,22 @@ posteriorProb(1) = prevLogLikelihood+prevLogPrior;
 % figure();scatter(1,0.1);pause(0.1);hold on;
 
 % FOR AUTOMATIC CREATION OF UPDATE MATRIX
-updateParam = 1e-2;
+updateParam = logspace(-1,-3,burnIn);
 loglambda = ones(numParams,1).*log(2.38^2);
 updateMu = zeros(numParams,1);
-updateMu(1:end-2) = mvnrnd(priorMu,priorSigma)';
+updateMu(1:end-2) = mvnrnd([priorMu;zeros(historyParams,1)],eye(numParams-2))';
 updateMu(end-1) = log(1.5);updateMu(end) = log(1.5);
 optimalAccept = 0.234;
 
-sigma = eye(numParams);identity = eye(numParams);
-mu = zeros(numParams,1);
-q = numParams-2;
+q = numParams;qIdentity = eye(q);identity = eye(numParams);
 W = normrnd(0,1,[numParams,q]);
-eigenvals = zeros(q,1);
 
-for jj=1:q
-    W(:,jj) = W(:,jj)./norm(W(:,jj));
-    eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
-end
+% sigmasquare = 1.5;expectedMean = 0.7;sigmamean = 1;
+M = W'*W;%+sigmasquare.*qIdentity;
+eigenvals = M(1:q+1:end)';
+% halfCov = cholcov(M);
+halfSigma = cholcov(eye(numParams));
+
 p = ones(q,1)./q;
 % figure(2);scatter(1,posteriorProb(1));hold on;pause(0.1);
 for ii=2:burnIn
@@ -196,9 +195,10 @@ for ii=2:burnIn
         smoothPrior = del2(pStar(2:end-2));
         
         beta = exp(pStar(end));alpha = exp(pStar(end-1));
-        pStarLogPrior = ((historyParams+1)/2)*log(alpha)-0.5*alpha*(pStar(1:end-2)'*pStar(1:end-2))+...
+        pStarLogPrior = ((historyParams)/2)*log(alpha)-0.5*alpha*(pStar(2:end-2)'*pStar(2:end-2))+...
+            0.5*log(alpha)-0.5*alpha*(pStar(1)-priorMu)^2+...
             ((historyParams)/2)*log(beta)-0.5*beta*(smoothPrior'*smoothPrior)+...
-            sum(log(gampdf([alpha,beta],abprior1,abprior2)));
+            sum(logGammaPDF([alpha,beta],abprior1,abprior2));
 %         pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
 %             log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
 %             sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
@@ -213,35 +213,69 @@ for ii=2:burnIn
         end
         
         meanSubtract = params(:,ii)-updateMu;
-        updateMu = updateMu+updateParam.*meanSubtract;
-%         sigma = sigma+updateParam.*(meanSubtract*meanSubtract'-sigma);
-        halfSigma = cholcov(sigma);
-        halfSigma = halfSigma+updateParam.*(triu((halfSigma^-1)*(sigma+meanSubtract*...
+        updateMu = updateMu+updateParam(ii).*meanSubtract;
+%         sigma2 = sigma2+updateParam(ii).*(meanSubtract*meanSubtract'-sigma2);
+        halfSigma = halfSigma+updateParam(ii).*(triu((halfSigma^-1)*(halfSigma'*halfSigma+meanSubtract*...
             meanSubtract')*((halfSigma^-1)')-identity)-halfSigma);
         sigma = halfSigma'*halfSigma;
         
-         Z = pinv(tril(W'*W)')'*W';
-         upperInverse = pinv(triu(Z*sigma*Z'));
-         W = sigma*Z'*upperInverse;
-         
-         for jj=1:q
+        Z = inv(tril(W'*W)')'*W';
+        W = sigma*Z'*inv(triu(Z*sigma*Z'));
+        
+        for jj=1:q
             W(:,jj) = W(:,jj)./norm(W(:,jj));
             eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
-         end
+        end
+        
+        
+%         Minv = 1./M(1:q+1:end)';
+%         H = (Minv.*W')*(meanSubtract);
+%         
+%         tempCov = (H*H');%sigmasquare.*diag(Minv)+(H*H');
+%         expectedMean = expectedMean+updateParam(ii).*(meanSubtract*H'-expectedMean);
+% %         expectedCov = expectedCov+updateParam(ii).*(tempCov-expectedCov);
+%         halfCov = halfCov+updateParam(ii).*(triu((halfCov^-1)*(halfCov'*halfCov+tempCov)*...
+%             ((halfCov^-1)')-qIdentity)-halfCov);
+%         
+%         W = expectedMean*inv(triu(halfCov'*halfCov));
+%         sigmamean = sigmamean+updateParam(ii).*(meanSubtract'*meanSubtract-...
+%             2*H'*W'*meanSubtract+trace(tempCov*(W'*W))-sigmamean);
+%         sigmasquare = max(sigmamean./numParams,1e-6);
+%         
+%         M = W'*W;%+sigmasquare.*qIdentity;
+%         eigenvals = M(1:q+1:end)';
          
-        lambda = lambda+updateParam.*(exp(min(0,logA))-optimalAccept);
+        lambda = lambda+updateParam(ii).*(exp(min(0,logA))-optimalAccept);
     else
         params(:,ii) = params(:,ii-1);
         posteriorProb(ii) = posteriorProb(ii-1);
-        lambda = lambda+updateParam.*(-optimalAccept);
+        lambda = lambda+updateParam(ii).*(-optimalAccept);
     end
     loglambda(index) = lambda;
 %     scatter(ii,posteriorProb(ii));hold on;pause(0.01);
 %     error(ii) = mean(abs([log(baseRate);historyB]-updateMu));
 %     scatter(ii,error);hold on;pause(0.01);
 end
-% sigma = exp(loglambda).*sigma;
-% p = linspace(1,0,numParams);p = p./sum(p);
+
+[V,D] = eig(cov(params(:,1e4:10:burnIn)'));
+W = V*sqrtm(D);
+eigenvals = diag(W'*W);
+
+tempW = [];
+tempEigs = [];
+for jj=1:numParams
+   if eigenvals(jj) > 1e-6
+       tempW = [tempW,W(:,jj)];
+       tempEigs = [tempEigs,eigenvals(jj)];
+   end
+end
+
+W = fliplr(tempW);
+eigenvals = fliplr(tempEigs);
+q = length(eigenvals);
+p = ones(q,1)./q;
+updateParam = 1e-2;
+
 acceptRate = 0;
 for ii=burnIn+1:numIter
     index = find(mnrnd(1,p)==1);
@@ -255,9 +289,10 @@ for ii=burnIn+1:numIter
         smoothPrior = del2(pStar(2:end-2));
         
         beta = exp(pStar(end));alpha = exp(pStar(end-1));
-        pStarLogPrior = ((historyParams+1)/2)*log(alpha)-0.5*alpha*(pStar(1:end-2)'*pStar(1:end-2))+...
+        pStarLogPrior = ((historyParams)/2)*log(alpha)-0.5*alpha*(pStar(2:end-2)'*pStar(2:end-2))+...
+            0.5*log(alpha)-0.5*alpha*(pStar(1)-priorMu)^2+...
             ((historyParams)/2)*log(beta)-0.5*beta*(smoothPrior'*smoothPrior)+...
-            sum(log(gampdf([alpha,beta],abprior1,abprior2)));
+            sum(logGammaPDF([alpha,beta],abprior1,abprior2));
 %         pStarLogPrior = log(mvnpdf(pStar(1:end-2),priorMu,(1/exp(pStar(end-1))).*priorSigma))+...
 %             log(mvnpdf(smoothPrior,smoothPriorMu,(1/exp(pStar(end))).*smoothPriorSigma))+...
 %             sum(log(gampdf(exp(pStar(end-1:end)),abprior1,abprior2)));
@@ -282,7 +317,7 @@ for ii=burnIn+1:numIter
 end
     
 % figure();plot(error);
-skipRate = 1000;
+skipRate = 500;
 fprintf('Final Acceptance Rate: %3.2f\n',acceptRate/(numIter-burnIn-1));
 posteriorSamples = params(:,burnIn+1:skipRate:end);
 % figure();histogram(posteriorSamples(2,:));

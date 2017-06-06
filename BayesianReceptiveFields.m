@@ -123,14 +123,15 @@ for ii=1:totalUnits
    end
 end
 
-filterTime = 0.2;filterSteps = 1/timeMultiplier;
-filterLen = filterTime/filterSteps+1;
+filterTime = 0.25;filterSteps = 1/timeMultiplier;
+filterLen = filterTime/filterSteps;
+taxis = filterTime:-filterSteps:-filterSteps;
 
 onScreenInds = zeros(totalCentisecs,filterLen,'single');
 for kk=filterLen+1:totalCentisecs
     stimOffset = timeVector(kk);
     temp = pointProcessStimTimes(round((stimOffset-filterTime)*timeMultiplier):...
-            round(filterSteps*timeMultiplier):round(stimOffset*timeMultiplier));
+            round(filterSteps*timeMultiplier):round((stimOffset-filterSteps)*timeMultiplier));
     onScreenInds(kk,:) = temp;
 end
 
@@ -146,7 +147,7 @@ clear beta;
 % MCMC
 for ii=1:totalUnits
     y = pointProcessSpikes(:,ii);
-    historyParams = 10;
+    historyParams = 15;
     historyDesign = zeros(totalCentisecs,historyParams);
     
     for kk=1:historyParams
@@ -161,19 +162,62 @@ for ii=1:totalUnits
     onScreenInds = onScreenInds(filterLen+1:end,:);
     
     logPoissonPDF = @(y,mu) y.*mu-exp(mu);
-    filterSize = DIM(1)*DIM(2)*filterLen;
-    Q = 10;
+    logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
+    gaborFun = @(x,y,t,B,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
+        B.*exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
+        ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
+        .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc)+v.*t)-phi)...
+        .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
+    
+    nonLinFun = @(x,base,slope,rise) rise.*exp((x-base).*slope)./(1+exp((x-base).*slope));
+    
+    % horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
+    % vertDegrees = atan((screenPix_to_effPix*DIM(2)*conv_factor/10)/DistToScreen);
+    xaxis = linspace(-screenPix_to_effPix*DIM(2)/2,...
+        screenPix_to_effPix*DIM(2)/2,DIM(2));
+    yaxis = linspace(-screenPix_to_effPix*DIM(1)/4,...
+        3*screenPix_to_effPix*DIM(1)/4,DIM(1));
+    
+    [X,Y,T] = meshgrid(xaxis,yaxis,taxis);
+    filterParams = 12;
+    Q = 10;numFilters = Q+1;
+    nonLinParams = 3;
     
     baseFiring = sum(y)/length(y);
-    numIter = 1.5e6;burnIn = 5e5;numParams = historyParams+1+(Q+1)*filterSize+2*(Q+1);
+    numIter = 1.5e6;burnIn = 5e5;numParams = historyParams+1+numFilters*filterParams+1*numFilters+Q+nonLinParams;
     skipRate = 1000;totalSamples = (numIter-burnIn)/skipRate;
     params = zeros(numParams,totalSamples);
     updateMu = zeros(numParams,1);
     updateSigma = eye(numParams);
     posteriorProb = zeros(totalSamples,1);
     
-    bVec = (historyParams+2):(history+2+filterSize);
     designVec = 1:(historyParams+1);
+    filterVec = zeros(numFilters,filterParams);
+    
+    currentStart = historyParams+2;
+    for jj=1:numFilters
+       filterVec(jj,:) = currentStart:currentStart+filterParams-1;
+       currentStart = currentStart+filterParams;
+    end
+    
+    priorMagVec = zeros(numFilters,1);
+    for jj=1:numFilters
+        priorMagVec(jj) = currentStart;
+        currentStart = currentStart+1;
+    end
+    
+    priorSuppressExcitVec = zeros(Q,1);
+    for jj=1:Q
+       priorSuppressExcitVec = currentStart;
+       currentStart = currentStart+1;
+    end
+    
+    nonLinVec = zeros(nonLinParams,1);
+    for jj=1:nonLinParams
+        nonLinVec = currentStart;
+        currentStart = currentStart+1;
+    end
+    clear currentStart;
     
     baseMu = log(baseFiring);
     historyPriorD = (historyParams)/2;
