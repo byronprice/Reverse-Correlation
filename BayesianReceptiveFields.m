@@ -1,4 +1,4 @@
-function [] = BayesianReceptiveFields(AnimalName,Date,NoiseType,startUnit)
+function [] = BayesianReceptiveFields(AnimalName,Date,NoiseType)
 %BayesianReceptiveFields.m
 %   %   Analysis of single unit recording data in response to a white
 %   or pink noise movie (see Noise_Movie.m for Psychtoolbox
@@ -14,7 +14,7 @@ function [] = BayesianReceptiveFields(AnimalName,Date,NoiseType,startUnit)
 %
 % Created: 2016/06/01, 24 Cummington Mall, Boston
 %  Byron Price
-% Updated: 2017/06/01
+% Updated: 2017/06/06
 % By: Byron Price
 
 %cd('~/CloudStation/ByronExp/NoiseRetino');
@@ -169,10 +169,8 @@ for ii=1:totalUnits
         .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc)+v.*t)-phi)...
         .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
     
-    nonLinFun = @(x,base,slope,rise) rise.*exp((x-base).*slope)./(1+exp((x-base).*slope));
+    nonLinFun = @(x,base,slope,rise) rise./(1+exp(-(x-base).*slope));
     
-    % horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
-    % vertDegrees = atan((screenPix_to_effPix*DIM(2)*conv_factor/10)/DistToScreen);
     xaxis = linspace(-screenPix_to_effPix*DIM(2)/2,...
         screenPix_to_effPix*DIM(2)/2,DIM(2));
     yaxis = linspace(-screenPix_to_effPix*DIM(1)/4,...
@@ -184,7 +182,8 @@ for ii=1:totalUnits
     nonLinParams = 3;
     
     baseFiring = sum(y)/length(y);
-    numIter = 1.5e6;burnIn = 5e5;numParams = historyParams+1+numFilters*filterParams+1*numFilters+Q+nonLinParams;
+    numIter = 1.5e6;burnIn = 5e5;
+    numParams = historyParams+1+2+numFilters*filterParams+1*numFilters+Q+nonLinParams;
     skipRate = 1000;totalSamples = (numIter-burnIn)/skipRate;
     params = zeros(numParams,totalSamples);
     updateMu = zeros(numParams,1);
@@ -192,9 +191,10 @@ for ii=1:totalUnits
     posteriorProb = zeros(totalSamples,1);
     
     designVec = 1:(historyParams+1);
+    abpriorVec = historyParams+2:historyParams+3;
     filterVec = zeros(numFilters,filterParams);
     
-    currentStart = historyParams+2;
+    currentStart = historyParams+4;
     for jj=1:numFilters
        filterVec(jj,:) = currentStart:currentStart+filterParams-1;
        currentStart = currentStart+filterParams;
