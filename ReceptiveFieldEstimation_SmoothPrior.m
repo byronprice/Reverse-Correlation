@@ -123,9 +123,9 @@ priorMu = log(baseFiring);
 % for ii=2:numParams-2
 %    priorMu(ii) = 0;
 % end
-
-smoothPriorMu = zeros(numParams-3,1);
-smoothPriorSigma = eye(numParams-3);
+% 
+% smoothPriorMu = zeros(numParams-3,1);
+% smoothPriorSigma = eye(numParams-3);
 
 alpha = 1;beta = 1;
 abprior1=1e-3;abprior2=1e3;
@@ -165,7 +165,7 @@ posteriorProb(1) = prevLogLikelihood+prevLogPrior;
 % figure();scatter(1,0.1);pause(0.1);hold on;
 
 % FOR AUTOMATIC CREATION OF UPDATE MATRIX
-updateParam = logspace(-1,-3,burnIn);
+updateParam = logspace(-0.3,-3,burnIn);
 loglambda = ones(numParams,1).*log(2.38^2);
 updateMu = zeros(numParams,1);
 updateMu(1:end-2) = mvnrnd([priorMu;zeros(historyParams,1)],eye(numParams-2))';

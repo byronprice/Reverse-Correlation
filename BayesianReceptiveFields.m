@@ -95,7 +95,7 @@ if isempty(allad{49}) == 0
     tempMov = tempMov-mean(tempMov);
     stdEst = 1.4826*mad(tempMov,1);
     movement = single(tempMov>(3*stdEst));
-    movement = movement(1:10:end);
+%     movement = movement(1:10:end);
     clear tempMov stdEst;
 end
 
@@ -161,7 +161,7 @@ for ii=1:totalUnits
     X = [ones(length(historyDesign),1),historyDesign];
     onScreenInds = onScreenInds(filterLen+1:end,:);
     
-    logPoissonPDF = @(y,mu) y.*mu-exp(mu);
+    logPoissonPDF = @(y,mu) y.*mu-exp(mu); % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
     logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
     gaborFun = @(x,y,t,B,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
         B.*exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
