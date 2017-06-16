@@ -221,9 +221,8 @@ for ii=2:burnIn
         
         Z = inv(tril(W'*W)')'*W';
         W = sigma*Z'*inv(triu(Z*sigma*Z'));
-        
+        W = normc(W);
         for jj=1:q
-            W(:,jj) = W(:,jj)./norm(W(:,jj));
             eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
         end
         
