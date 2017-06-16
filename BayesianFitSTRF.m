@@ -1,5 +1,5 @@
-function [] = BayesianReceptiveFields(AnimalName,Date,NoiseType)
-%BayesianReceptiveFields.m
+function [] = BayesianFitSTRF(AnimalName,Date,NoiseType)
+%BayesianFitSTRF.m
 %   %   Analysis of single unit recording data in response to a white
 %   or pink noise movie (see Noise_Movie.m for Psychtoolbox
 %   stimulus)
