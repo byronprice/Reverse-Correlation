@@ -48,7 +48,7 @@ xaxis = linspace(-screenPix_to_effPix*DIM(2)/2,...
 yaxis = linspace(-screenPix_to_effPix*DIM(1)/4,...
     3*screenPix_to_effPix*DIM(1)/4,DIM(1));
 
-[X,Y] = meshgrid(xaxis);
+[X,Y] = meshgrid(xaxis,yaxis);
 
 % CREATE UNBIASED VERSION OF MOVIE BY DIVIDING OUT POWER SPECTRUM
 %  USED TO GENERATE THE MOVIE
@@ -122,16 +122,19 @@ end
 totalMillisecs = round(totalTime*1000);
 
 stimTimes = round(strobeData.*1000);
-pointProcessStimTimes = ones(totalMillisecs,1);
+pointProcessStimTimes = ones(totalMillisecs,numStimuli+1);
 
 if exist('flipIntervals','var')==1
     flipInterval = mean(flipIntervals);
 end
 
 for kk=1:numStimuli-1
-   pointProcessStimTimes(stimTimes(kk):stimTimes(kk+1)-1) = kk+1;
+   pointProcessStimTimes(stimTimes(kk)+50:stimTimes(kk)+120,kk+1) = 1;
 end
 pointProcessStimTimes(stimTimes(numStimuli):(stimTimes(numStimuli)+1000*flipInterval)) = numStimuli+1;
+
+temp = sum(pointProcessStimTimes(:,2:end),2);
+stimOn = temp>0;
 
 pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 
@@ -144,60 +147,45 @@ end
 
 gaborParams = 8*21;
 nonLinParams = 3;
-numParameters = gaborParams+nonLinParams+2;
+historyParams = 101;
+numParameters = historyParams+gaborParams+nonLinParams+3;
 
 Bounds = zeros(numParameters,2);
-Bounds(1,:) = [-200,200];
-Bounds(2,:) = [-pi,pi]; % A orientation of Gabor
-Bounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
-Bounds(4,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
-Bounds(5,:) = [1,500]; % standard deviation x
-Bounds(6,:) = [1,500]; % standard deviation y
-Bounds(7,:) = [0,100]; % spatial frequency
-Bounds(8,:) = [-pi,pi]; %  orientation theta
-Bounds(9,:) = [-pi,pi]; % phase shift phi
-Bounds(10,:) = [-1000,1000]; % sigmoid base
-Bounds(11,:) = [0,200]; % sigmoid slope
-Bounds(12,:) = [0,200]; % sigmoid rise
+Bounds(1:historyParams,:) = [-200,200]; % baseline & history
+Bounds(historyParams+1,:) = [-pi,pi]; % A orientation of Gabor
+Bounds(historyParams+2,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
+Bounds(historyParams+3,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
+Bounds(historyParams+4,:) = [1,500]; % standard deviation x
+Bounds(historyParams+5,:) = [1,500]; % standard deviation y
+Bounds(historyParams+6,:) = [0,100]; % spatial frequency
+Bounds(historyParams+7,:) = [-pi,pi]; %  orientation theta
+Bounds(historyParams+8,:) = [-pi,pi]; % phase shift phi
+Bounds(historyParams+9,:) = [-1000,1000]; % sigmoid base
+Bounds(historyParams+10,:) = [0,200]; % sigmoid slope
+Bounds(historyParams+11,:) = [0,200]; % sigmoid rise
+Bounds(historyParams+12,:) = [-200,200]; % parameter for stimulus on screen (DC gain)
 Bounds(end,:) = [-200,200]; % parameter for movement modulation
 
-numIter = 6e5;burnIn = 1e5;skipRate = 500;
+numIter = 11e5;burnIn = 1e5;skipRate = 500;
 
 PosteriorSamples = zeros(totalUnits,numParameters,length(burnIn+1:skipRate:numIter));
 PosteriorMean = zeros(totalUnits,numParameters);
 PosteriorInterval = zeros(totalUnits,numParameters,2);
 for zz=1:totalUnits
         % ORGANIZE DATA
-        
         spikeTrain = pointProcessSpikes(:,zz);
-        stimPeriod = [50,120];
-        y = zeros(numStimuli+10,1);
-        reducedMovement = zeros(numStimuli+10,1);
-        for ii=1:numStimuli
-            stimOnset = find(pointProcessStimTimes==ii+1,'first');
-            y(ii) = sum(pointProcessSpikes(stimOnset+stimPeriod(1)-1:stimOnset+stimPeriod(2)));
-            if sum(movement(stimOnset+stimPeriod(1)-1:stimOnset+stimPeriod(2))) > (stimPeriod(2)-stimPeriod(1))/2
-                reducedMovement(ii) = 1;
-            end
+        historyDesign = zeros(length(spikeTrain),historyParams-1);
+        for kk=1:historyParams
+            temp = y;shift = zeros(kk,1);
+            history = [shift;temp];
+            historyDesign(:,kk) = history(1:(end-kk));
         end
         
-        greyTimes = find(pointProcessStimTimes==0);
-        for ii=1:10
-            index = random('Discrete Uniform',length(greyTimes));
-            stimOnset = greyTimes(index);
-            y(numStimuli+ii) = sum(pointProcessSpikes(stimOnset+stimPeriod(1)-1:stimOnset+stimPeriod(2)));
-            if sum(movement(stimOnset+stimPeriod(1)-1:stimOnset+stimPeriod(2))) > (stimPeriod(2)-stimPeriod(1))/2
-                reducedMovement(numStimuli+ii) = 1;
-            end
-        end
-        
-        [b] = glmfit(reducedMovement,y,'poisson');
         
         
         % RUN MCMC
         h = ones(numParameters,1)./1000;
 
-        numIter = 5e5;burnIn = 1e5;
         parameterVec = zeros(numParameters,numIter);
         posteriorProb = zeros(numIter,1);
         
