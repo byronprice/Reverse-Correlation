@@ -8,7 +8,7 @@ function [PosteriorSamples,PosteriorMean,PosteriorInterval,Likelihood] =...
 % declare global variables
 global numStimuli totalMillisecs pointProcessStimTimes h ...
     unbiasedS numParameters historyParams ...
-    reducedMovement X Y gaborFun nonLinFun spikeTrain;
+    movement X Y gaborFun nonLinFun spikeTrain;
 % read in the .plx file
 beta = 0;
 
@@ -126,7 +126,7 @@ else
 end
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-timeMultiplier = 100;
+timeMultiplier = 1000;
 totalMillisecs = round(totalTime*timeMultiplier);
 
 stimTimes = round(strobeData.*timeMultiplier);
@@ -154,15 +154,15 @@ end
 
 gaborParams = 10*21;
 nonLinParams = 3;
-% historyParams = 101;
-numParameters = 3+gaborParams+nonLinParams+5;
+historyParams = 101;
+numParameters = historyParams+3+gaborParams+nonLinParams+5;
 
 logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
 logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
 logVonMises = @(x,k,mu) k.*cos(x-mu)-log(besseli(0,k));
 
 Bounds = zeros(numParameters,2);
-Bounds(1:3,:) = repmat([-200,200],[3,1]); % two baselines, history, and movement
+Bounds(1:historyParams+2,:) = repmat([-200,200],[historyParams+2,1]); % two baselines, history, and movement
 
 gaborBounds = zeros(9,2);
 gaborBounds(1,:) = [-5000,5000]; % B for size of gabor
