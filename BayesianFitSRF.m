@@ -22,13 +22,13 @@ StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(Animal
 load(EphysFileName,'nunits1','allts','adfreq','allad','svStrobed','tsevs')
 load(StimulusFileName)
 
-gaborFun = @(x,y,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
-    exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
+gaborFun = @(x,y,B,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
+    B.*exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
     ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
-    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc))-phi);
+    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)-sin(theta-pi/2).*(y-yc))-phi);
 
 %nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
-nonLinFun = @(x,base,slope,rise,drop) rise./(1+exp((x-base).*slope));
+nonLinFun = @(x,base,slope,rise) rise./(1+exp(-(x-base).*slope));
 %nonLinFun = @(x,slope,intercept) max(0,slope.*x+intercept);
 
 % horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
@@ -87,6 +87,10 @@ allts = temp;
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
+if length(strobeData) ~= numStimuli
+    strobeData = strobeData(1:2:end);
+end
+
 % GATHER LFP AND MOVEMENT DATA
 nonEmptyAD = ~cellfun(@isempty,allad);
 inds = find(nonEmptyAD==1);
@@ -122,19 +126,18 @@ end
 totalMillisecs = round(totalTime*1000);
 
 stimTimes = round(strobeData.*1000);
-pointProcessStimTimes = ones(totalMillisecs,numStimuli+1);
+pointProcessStimTimes = ones(totalMillisecs,numStimuli);
 
 if exist('flipIntervals','var')==1
     flipInterval = mean(flipIntervals);
 end
 
-for kk=1:numStimuli-1
-   pointProcessStimTimes(stimTimes(kk)+50:stimTimes(kk)+120,kk+1) = 1;
+for kk=1:numStimuli
+   pointProcessStimTimes(stimTimes(kk)+50:stimTimes(kk)+150,kk) = 1;
 end
-pointProcessStimTimes(stimTimes(numStimuli):(stimTimes(numStimuli)+1000*flipInterval)) = numStimuli+1;
 
-temp = sum(pointProcessStimTimes(:,2:end),2);
-stimOn = temp>0;
+temp = sum(pointProcessStimTimes,2);
+stimOn = temp>0;stimOff = 1-stimOn;
 
 pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 
@@ -145,28 +148,52 @@ for ii=1:totalUnits
    end
 end
 
-gaborParams = 8*21;
+gaborParams = 10*21;
 nonLinParams = 3;
 historyParams = 101;
-numParameters = historyParams+gaborParams+nonLinParams+3;
+numParameters = historyParams+2+gaborParams+nonLinParams+2;
+
+logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
+logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
+logVonMises = @(x,k,mu) k.*cos(x-mu)-log(besseli(0,k));
 
 Bounds = zeros(numParameters,2);
-Bounds(1:historyParams,:) = [-200,200]; % baseline & history
-Bounds(historyParams+1,:) = [-pi,pi]; % A orientation of Gabor
-Bounds(historyParams+2,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
-Bounds(historyParams+3,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
-Bounds(historyParams+4,:) = [1,500]; % standard deviation x
-Bounds(historyParams+5,:) = [1,500]; % standard deviation y
-Bounds(historyParams+6,:) = [0,100]; % spatial frequency
-Bounds(historyParams+7,:) = [-pi,pi]; %  orientation theta
-Bounds(historyParams+8,:) = [-pi,pi]; % phase shift phi
-Bounds(historyParams+9,:) = [-1000,1000]; % sigmoid base
-Bounds(historyParams+10,:) = [0,200]; % sigmoid slope
-Bounds(historyParams+11,:) = [0,200]; % sigmoid rise
-Bounds(historyParams+12,:) = [-200,200]; % parameter for stimulus on screen (DC gain)
-Bounds(end,:) = [-200,200]; % parameter for movement modulation
+Bounds(1:historyParams+2,:) = [-200,200]; % two baselines, history, and movement
 
-numIter = 11e5;burnIn = 1e5;skipRate = 500;
+gaborBounds = zeros(9,2);
+gaborBounds(1,:) = [-5000,5000]; % B for size of gabor
+gaborBounds(2,:) = [-pi,pi]; % A orientation of Gabor
+gaborBounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
+gaborBounds(4,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
+gaborBounds(5,:) = [1,2000]; % standard deviation x
+gaborBounds(6,:) = [1,2000]; % standard deviation y
+gaborBounds(7,:) = [0,100]; % spatial frequency
+gaborBounds(8,:) = [-pi,pi]; %  orientation theta
+gaborBounds(9,:) = [-pi,pi]; % phase shift phi
+
+nonLinBounds = zeros(3,2);
+nonLinBounds(1,:) = [-1000,1000]; % sigmoid base
+nonLinBounds(2,:) = [0,200]; % sigmoid slope
+nonLinBounds(3,:) = [0,200]; % sigmoid rise
+
+alphaBounds = zeros(1,2);
+alphaBounds(1,:) = [-20,Inf]; % for any precision parameter
+
+stimOffVec = 1;stimOnVec = historyParams+1;
+historyVec = 2:historyParams;moveVec = historyParams+2;
+designVec = 1:historyParams+2;
+cVec = historyParams+3:historyParams+3+20*9-1;
+bVec = cVec(end)+1:cVec(end)+9-1;
+nonLinVec = bVec(end)+1:bVec(end)+3-1;
+precisionVec = nonLinVec(end):nonLinVec(end)+23-1;
+
+Bounds(bVec,:) = gaborBounds;
+Bounds(cVec,:) = repmat(gaborBounds,[20,1]);
+Bounds(nonLinVec,:) = nonLinBounds;
+Bounds(precisionVec,:) = repmat(alphaBounds,[23,1]);
+
+
+numIter = 16e5;burnIn = 1e5;skipRate = 1000;
 
 PosteriorSamples = zeros(totalUnits,numParameters,length(burnIn+1:skipRate:numIter));
 PosteriorMean = zeros(totalUnits,numParameters);
@@ -174,17 +201,25 @@ PosteriorInterval = zeros(totalUnits,numParameters,2);
 for zz=1:totalUnits
         % ORGANIZE DATA
         spikeTrain = pointProcessSpikes(:,zz);
-        historyDesign = zeros(length(spikeTrain),historyParams-1);
-        for kk=1:historyParams
+        historyDesign = zeros(length(spikeTrain),historyParams+2);
+        for kk=1:historyParams-1
             temp = y;shift = zeros(kk,1);
             history = [shift;temp];
-            historyDesign(:,kk) = history(1:(end-kk));
+            historyDesign(:,kk+1) = history(1:(end-kk));
         end
+        historyDesign(:,1) = stimOff;
+        historyDesign(:,end-1) = stimOn;
+        historyDesign(:,end) = movement;
         
+        spikeTrain = spikeTrain(historyParams:end);
+        historyDesign = historyDesign(historyParams:end,:);
         
-        
-        % RUN MCMC
-        h = ones(numParameters,1)./1000;
+       
+        %MCMC intialization
+        priorParams = zeros(numParameters,2);
+        priorParams(stimOffVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
+        priorParams(stimOnVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
+        priorParams(moveVec,:) = [0,0];
 
         parameterVec = zeros(numParameters,numIter);
         posteriorProb = zeros(numIter,1);
@@ -212,7 +247,7 @@ for zz=1:totalUnits
         
         likelihoodXprev = GetLikelihood(parameterVec(:,1));
         
-        for iter = 2:numIter
+        for iter = 2:burnIn
             xStar = parameterVec(:,iter-1)+normrnd(0,sigma,[numParameters,1]);
             xStar([historyParams+4,historyParams+10,historyParams+11]) = ...
                 mod(xStar([historyParams+4,historyParams+10,historyParams+11]),twopi);

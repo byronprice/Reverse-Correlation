@@ -27,7 +27,7 @@ pointProcessStimTimes(stimTimes(numStimuli):stimTimes(numStimuli)+15) = numStimu
 gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
     exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
     ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
-    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc)+v.*t)-phi)...
+    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)-sin(theta-pi/2).*(y-yc)+v.*t)-phi)...
     .*(k.*t).^n.*exp(-k.*t).*(1/gamma(n+1)-(k.*t).^2./(gamma(n+3)));
 
 t = 200:-1:0;
@@ -114,7 +114,8 @@ X = [ones(length(historyDesign),1),historyDesign];
 % historyParams = numBasis;
 
 baseFiring = sum(y)/length(y);
-numIter = 1.05e6;burnIn = 2e4;numParams = historyParams+3;
+numIter = 1e6;burnIn = 1e5;skipRate = 500;
+numParams = historyParams+3;
 params = zeros(numParams,numIter);
 posteriorProb = zeros(numIter,1);
 
@@ -165,7 +166,7 @@ posteriorProb(1) = prevLogLikelihood+prevLogPrior;
 % figure();scatter(1,0.1);pause(0.1);hold on;
 
 % FOR AUTOMATIC CREATION OF UPDATE MATRIX
-updateParam = logspace(-0.3,-3,burnIn);
+updateParam = logspace(-0.3,-2,burnIn);
 loglambda = ones(numParams,1).*log(2.38^2);
 updateMu = zeros(numParams,1);
 updateMu(1:end-2) = mvnrnd([priorMu;zeros(historyParams,1)],eye(numParams-2))';
@@ -212,20 +213,20 @@ for ii=2:burnIn
             posteriorProb(ii) = posteriorProb(ii-1);
         end
         
-        meanSubtract = params(:,ii)-updateMu;
-        updateMu = updateMu+updateParam(ii).*meanSubtract;
-%         sigma2 = sigma2+updateParam(ii).*(meanSubtract*meanSubtract'-sigma2);
-        halfSigma = halfSigma+updateParam(ii).*(triu((halfSigma^-1)*(halfSigma'*halfSigma+meanSubtract*...
-            meanSubtract')*((halfSigma^-1)')-identity)-halfSigma);
-        sigma = halfSigma'*halfSigma;
-        
-        Z = inv(tril(W'*W)')'*W';
-        W = sigma*Z'*inv(triu(Z*sigma*Z'));
-        W = normc(W);
-        for jj=1:q
-            eigenvals(jj) = W(:,jj)'*sigma*W(:,jj);
+        if mod(ii,100) == 0
+            meanSubtract = params(:,ii)-updateMu;
+            updateMu = updateMu+updateParam(ii).*meanSubtract;
+            %         sigma2 = sigma2+updateParam(ii).*(meanSubtract*meanSubtract'-sigma2);
+            halfSigma = halfSigma+updateParam(ii).*(triu((halfSigma^-1)*(halfSigma'*halfSigma+meanSubtract*...
+                meanSubtract')*((halfSigma^-1)')-identity)-halfSigma);
+            sigma = halfSigma'*halfSigma;
+            
+            Z = inv(tril(W'*W)')'*W';
+            W = sigma*Z'*inv(triu(Z*sigma*Z'));
+            W = normc(W);
+            eigenvals = diag(W'*sigma*W);
+            lambda = lambda+updateParam(ii).*(exp(min(0,logA))-optimalAccept);
         end
-        
         
 %         Minv = 1./M(1:q+1:end)';
 %         H = (Minv.*W')*(meanSubtract);
@@ -244,7 +245,7 @@ for ii=2:burnIn
 %         M = W'*W;%+sigmasquare.*qIdentity;
 %         eigenvals = M(1:q+1:end)';
          
-        lambda = lambda+updateParam(ii).*(exp(min(0,logA))-optimalAccept);
+        
     else
         params(:,ii) = params(:,ii-1);
         posteriorProb(ii) = posteriorProb(ii-1);
@@ -314,9 +315,8 @@ for ii=burnIn+1:numIter
     end
     loglambda(index) = lambda;
 end
-    
+
 % figure();plot(error);
-skipRate = 500;
 fprintf('Final Acceptance Rate: %3.2f\n',acceptRate/(numIter-burnIn-1));
 posteriorSamples = params(:,burnIn+1:skipRate:end);
 % figure();histogram(posteriorSamples(2,:));
