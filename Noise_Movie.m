@@ -40,6 +40,8 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
+DistToScreen = 25; 
+
 movieNum = random('Discrete Uniform',78);
 
 fileName = sprintf('5Min_PinkNoiseMovie%d.mat',movieNum);
@@ -145,7 +147,7 @@ Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat','pink',Date,AnimalName);
 save(filename,'numStimuli','movie_FrameRate','movieTime_Seconds',...
-    'DistToScreen','screenPix_to_effPix','minPix','maxPix','degPerPix',...
+    'DistToScreen','screenPix_to_effPix','minPix','maxPix',...
     'conv_factor','beta','movieNums','destRect');
 end
 

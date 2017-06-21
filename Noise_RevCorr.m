@@ -56,7 +56,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-TimeEstimate = numStimuli*(flipInterval+WaitTime+0.2)/60;
+TimeEstimate = numStimuli*(flipInterval+1)/60+3*0.5;
 fprintf('\nEstimated time is %3.2f minutes.',TimeEstimate);
 WaitSecs(5);
 
@@ -94,13 +94,13 @@ spatialSampleFreq = 1/gridSpacing; % in units of 1/cm
 % GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
     beta = 0;
-    spaceExp = 2;
+%     spaceExp = 2;
 elseif strcmp(NoiseType,'pink') == 1
     beta = -2;
-    spaceExp = 2;
+%     spaceExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
     beta = -4;
-    spaceExp = 2;
+%     spaceExp = 2;
 else 
     display('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.')
     return;
@@ -132,11 +132,27 @@ Priority(9);
 % Retrieve monitor refresh duration
 ifi = Screen('GetFlipInterval', win);
 
-WaitTimes = WaitTime+exprnd(0.2,[numStimuli,1]);
+WaitTimes = WaitTime+unifrnd(0,1,[numStimuli,1]);
 
 usb.startRecording;usb.strobeEventWord(0);
 WaitSecs(30);
 tt = 1;
+vbl = Screen('Flip',win);
+while tt <= numStimuli/2
+    % Convert it to a texture 'tex':
+    Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
+    tex = Screen('MakeTexture',win,Img);
+    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
+                                        % 1 is bilinear filter
+    vbl = Screen('Flip',win);usb.strobeEventWord(1);
+    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobeEventWord(2);
+    vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
+    Screen('Close',tex);
+    tt = tt+1;
+end
+Screen('Flip',win);usb.strobeEventWord(0);
+WaitSecs(30);
+
 vbl = Screen('Flip',win);
 while tt <= numStimuli
     % Convert it to a texture 'tex':
@@ -161,8 +177,8 @@ Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
-    'DistToScreen','screenPix_to_effPix','minPix','NoiseType','degPerPix',...
-    'conv_factor','WaitTimes','beta','spaceExp','DIM','spatialSampleFreq');
+    'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
+    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
