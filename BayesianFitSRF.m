@@ -7,7 +7,7 @@ function [PosteriorSamples,PosteriorMean,PosteriorInterval,Likelihood] =...
 
 % declare global variables
 global numStimuli totalMillisecs pointProcessStimTimes h ...
-    unbiasedS numParameters historyParams ...
+    unbiasedS numParameters designParams ...
     movement X Y gaborFun nonLinFun spikeTrain;
 % read in the .plx file
 beta = 0;
@@ -146,25 +146,31 @@ stimOn = temp>0;stimOff = 1-stimOn;
 pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 
 for ii=1:totalUnits
-   spikeTimes = round(allts{ii}.*timeMultiplier);
+   spikeTimes = max(1,round(allts{ii}.*timeMultiplier));
    for jj=1:length(spikeTimes)
       pointProcessSpikes(spikeTimes(jj),ii) = 1;
    end
 end
 
-gaborParams = 10*21;
+numFilters = 21;
+gaborParams = 9;
 nonLinParams = 3;
-historyParams = 101;
-numParameters = historyParams+3+gaborParams+nonLinParams+5;
+historyParams = 100;
+moveParams = 1;
+baseParams = 2;
+precisionParams = numFilters+moveParams+baseParams+nonLinParams;
+designParams = historyParams+moveParams+baseParams;
+numParameters = designParams+gaborParams*numFilters+nonLinParams+precisionParams;
 
 logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
 logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
 logVonMises = @(x,k,mu) k.*cos(x-mu)-log(besseli(0,k));
 
 Bounds = zeros(numParameters,2);
-Bounds(1:historyParams+2,:) = repmat([-200,200],[historyParams+2,1]); % two baselines, history, and movement
 
-gaborBounds = zeros(9,2);
+designBounds = repmat([-200,200],[designParams,1]); % two baselines, history, and movement
+
+gaborBounds = zeros(gaborParams,2);
 gaborBounds(1,:) = [-5000,5000]; % B for size of gabor
 gaborBounds(2,:) = [-pi,pi]; % A orientation of Gabor
 gaborBounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
@@ -175,29 +181,34 @@ gaborBounds(7,:) = [0,100]; % spatial frequency
 gaborBounds(8,:) = [-pi,pi]; %  orientation theta
 gaborBounds(9,:) = [-pi,pi]; % phase shift phi
 
-nonLinBounds = zeros(3,2);
+nonLinBounds = zeros(nonLinParams,2);
 nonLinBounds(1,:) = [-1000,1000]; % sigmoid base
 nonLinBounds(2,:) = [0,200]; % sigmoid slope
 nonLinBounds(3,:) = [0,200]; % sigmoid rise
 
-alphaBounds = zeros(1,2);
-alphaBounds(1,:) = [-20,Inf]; % for any precision parameter
+alphaBounds = repmat([-30,Inf],[precisionParams,1]); % for any precision parameter
 
-stimOffVec = 1;stimOnVec = historyParams+1;
-historyVec = 2:historyParams;moveVec = historyParams+2;
-designVec = 1:historyParams+2;
-cVec = historyParams+3:historyParams+3+20*9-1;
-bVec = cVec(end)+1:cVec(end)+9-1;
-nonLinVec = bVec(end)+1:bVec(end)+3-1;
-precisionVec = nonLinVec(end):nonLinVec(end)+26-1;
+designVec = 1:designParams;
+bVec = designParams+1:designParams+gaborParams;
+cVec = bVec(end)+1:bVec(end)+gaborParams*(numFilters-1);
+nonLinVec = cVec(end)+1:cVec(end)+nonLinParams;
+precisionVec = nonLinVec(end)+1:nonLinVec(end)+precisionParams;
 
+Bounds(designVec,:) = designBounds;
 Bounds(bVec,:) = gaborBounds;
-Bounds(cVec,:) = repmat(gaborBounds,[20,1]);
+Bounds(cVec,:) = repmat(gaborBounds,[numFilters-1,1]);
 Bounds(nonLinVec,:) = nonLinBounds;
-Bounds(precisionVec,:) = repmat(alphaBounds,[26,1]);
+Bounds(precisionVec,:) = alphaBounds;
 
-gaborPrior = zeros(9,2);
+clear nonLinBounds gaborBounds historyMoveBaseBounds alphaBounds designBounds;
+
+designPrior = zeros(length(designVec),2);
+
+gaborPrior = zeros(gaborParams,2);
 gaborPrior(1,:) = [0,0];
+
+nonLinPrior = zeros(nonLinParams,2);
+precisionPrior = repmat([1e-3,1e3],[precisionParams,1]);
 
 numIter = 16e5;burnIn = 1e5;skipRate = 1000;
 

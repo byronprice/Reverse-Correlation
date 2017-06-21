@@ -190,7 +190,7 @@ for ii=2:burnIn
     stdev = sqrt(exp(lambda).*eigenvals(index));
     pStar = params(:,ii-1)+W(:,index)*normrnd(0,stdev);
     
-    if sum(pStar(end-1:end)<=-20) == 0
+    if sum(pStar(end-1:end)<=-30) == 0
         tempMu = X*pStar(1:end-2);
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
         smoothPrior = del2(pStar(2:end-2));
@@ -283,7 +283,7 @@ for ii=burnIn+1:numIter
     stdev = sqrt(exp(lambda).*eigenvals(index));
     pStar = params(:,ii-1)+W(:,index)*normrnd(0,stdev);
     
-    if sum(pStar(end-1:end)<=-20) == 0
+    if sum(pStar(end-1:end)<=-30) == 0
         tempMu = X*pStar(1:end-2);
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
         smoothPrior = del2(pStar(2:end-2));
