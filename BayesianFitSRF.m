@@ -39,8 +39,8 @@ if size(effectivePixels,2) == 1
     DIM(1) = sqrt(effectivePixels);
     DIM(2) = sqrt(effectivePixels);
 elseif size(effectivePixels,2) == 2
-    DIM(1) = effectivePixels(1);
-    DIM(2) = effectivePixels(2);
+    DIM(1) = effectivePixels(2);
+    DIM(2) = effectivePixels(1);
 end
     
 xaxis = linspace(-screenPix_to_effPix*DIM(2)/2,...
@@ -59,10 +59,13 @@ v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
 S_f = (U.^2+V.^2).^(beta/2);
 
 S_f(S_f==inf) = 1;
-
+a = 0;b = 255;
 unbiasedS = zeros(size(S));
 for ii=1:numStimuli
-    unbiasedS(ii,:) = reshape(real(ifftn(fftn(double(reshape(S(ii,:),[DIM(1),DIM(2)])))./S_f)),[DIM(1)*DIM(2),1])';
+    temp = reshape(real(ifftn(fftn(double(reshape(S(ii,:),[DIM(1),DIM(2)])))./S_f)),[DIM(1)*DIM(2),1])';
+    currentMin = min(temp);currentMax = max(temp);
+    temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
+    unbiasedS(ii,:) = temp;
 end
 
 clear S S_f U V u v;
@@ -123,17 +126,18 @@ else
 end
 
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-totalMillisecs = round(totalTime*1000);
+timeMultiplier = 100;
+totalMillisecs = round(totalTime*timeMultiplier);
 
-stimTimes = round(strobeData.*1000);
-pointProcessStimTimes = ones(totalMillisecs,numStimuli);
+stimTimes = round(strobeData.*timeMultiplier);
+pointProcessStimTimes = ones(totalMillisecs,numStimuli,'single');
 
 if exist('flipIntervals','var')==1
     flipInterval = mean(flipIntervals);
 end
 
 for kk=1:numStimuli
-   pointProcessStimTimes(stimTimes(kk)+50:stimTimes(kk)+150,kk) = 1;
+   pointProcessStimTimes(stimTimes(kk)+0.05*timeMultiplier:stimTimes(kk)+0.15*timeMultiplier,kk) = 1;
 end
 
 temp = sum(pointProcessStimTimes,2);
@@ -142,7 +146,7 @@ stimOn = temp>0;stimOff = 1-stimOn;
 pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 
 for ii=1:totalUnits
-   spikeTimes = round(allts{ii}.*1000);
+   spikeTimes = round(allts{ii}.*timeMultiplier);
    for jj=1:length(spikeTimes)
       pointProcessSpikes(spikeTimes(jj),ii) = 1;
    end
@@ -150,15 +154,15 @@ end
 
 gaborParams = 10*21;
 nonLinParams = 3;
-historyParams = 101;
-numParameters = historyParams+2+gaborParams+nonLinParams+2;
+% historyParams = 101;
+numParameters = 3+gaborParams+nonLinParams+5;
 
 logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
 logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
 logVonMises = @(x,k,mu) k.*cos(x-mu)-log(besseli(0,k));
 
 Bounds = zeros(numParameters,2);
-Bounds(1:historyParams+2,:) = [-200,200]; % two baselines, history, and movement
+Bounds(1:3,:) = repmat([-200,200],[3,1]); % two baselines, history, and movement
 
 gaborBounds = zeros(9,2);
 gaborBounds(1,:) = [-5000,5000]; % B for size of gabor
@@ -185,13 +189,15 @@ designVec = 1:historyParams+2;
 cVec = historyParams+3:historyParams+3+20*9-1;
 bVec = cVec(end)+1:cVec(end)+9-1;
 nonLinVec = bVec(end)+1:bVec(end)+3-1;
-precisionVec = nonLinVec(end):nonLinVec(end)+23-1;
+precisionVec = nonLinVec(end):nonLinVec(end)+26-1;
 
 Bounds(bVec,:) = gaborBounds;
 Bounds(cVec,:) = repmat(gaborBounds,[20,1]);
 Bounds(nonLinVec,:) = nonLinBounds;
-Bounds(precisionVec,:) = repmat(alphaBounds,[23,1]);
+Bounds(precisionVec,:) = repmat(alphaBounds,[26,1]);
 
+gaborPrior = zeros(9,2);
+gaborPrior(1,:) = [0,0];
 
 numIter = 16e5;burnIn = 1e5;skipRate = 1000;
 
@@ -223,25 +229,6 @@ for zz=1:totalUnits
 
         parameterVec = zeros(numParameters,numIter);
         posteriorProb = zeros(numIter,1);
-        
-        parameterVec(1,1) = b(1);
-        parameterVec(end,1) = b(2);
-        
-        parameterVec(historyParams+1,1) = normrnd(0.5,0.1);
-        parameterVec(historyParams+2,1) = normrnd(15,5);
-        parameterVec(historyParams+3,1) = normrnd(0,0.1);
-        parameterVec(historyParams+4,1) = normrnd(pi,pi/4);
-        parameterVec(historyParams+5,1) = normrnd(0,300);
-        parameterVec(historyParams+6,1) = normrnd(0,200);
-        parameterVec(historyParams+7,1) = normrnd(150,50);
-        parameterVec(historyParams+8,1) = normrnd(150,50);
-        parameterVec(historyParams+9,1) = normrnd(0.4,0.1);
-        parameterVec(historyParams+10,1) = normrnd(pi,pi/4);
-        parameterVec(historyParams+11,1) = normrnd(pi,pi/4);
-        parameterVec(historyParams+12,1) = normrnd(2,1);
-        parameterVec(historyParams+13,1) = normrnd(5,0.5);
-        parameterVec(historyParams+14,1) = normrnd(1,0.5);
-        parameterVec(historyParams+15,1) = normrnd(0,1);
         
         parameterVec(:,1) = max(Bounds(:,1),min(parameterVec(:,1),Bounds(:,2)));
         
