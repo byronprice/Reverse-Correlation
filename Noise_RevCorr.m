@@ -178,7 +178,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq');
+    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)

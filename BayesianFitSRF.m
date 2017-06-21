@@ -152,6 +152,7 @@ for ii=1:totalUnits
    end
 end
 
+% INITIALIZE NUMBER OF PARAMETERS
 numFilters = 21;
 gaborParams = 9;
 nonLinParams = 3;
@@ -162,16 +163,18 @@ precisionParams = numFilters+moveParams+baseParams+nonLinParams;
 designParams = historyParams+moveParams+baseParams;
 numParameters = designParams+gaborParams*numFilters+nonLinParams+precisionParams;
 
+% FUNCTIONS THAT WILL CALLED
 logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
 logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
 logVonMises = @(x,k,mu) k.*cos(x-mu)-log(besseli(0,k));
 
+% INTIALIZE BOUNDS
 Bounds = zeros(numParameters,2);
 
 designBounds = repmat([-200,200],[designParams,1]); % two baselines, history, and movement
 
 gaborBounds = zeros(gaborParams,2);
-gaborBounds(1,:) = [-5000,5000]; % B for size of gabor
+gaborBounds(1,:) = [-5000,5000]; % B for height of gabor
 gaborBounds(2,:) = [-pi,pi]; % A orientation of Gabor
 gaborBounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
 gaborBounds(4,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
@@ -186,8 +189,10 @@ nonLinBounds(1,:) = [-1000,1000]; % sigmoid base
 nonLinBounds(2,:) = [0,200]; % sigmoid slope
 nonLinBounds(3,:) = [0,200]; % sigmoid rise
 
-alphaBounds = repmat([-30,Inf],[precisionParams,1]); % for any precision parameter
+alphaBounds = repmat([-Inf,Inf],[precisionParams,1]); % for any precision parameter
 
+% INITIALIZE INDEX VECTORS FOR EASY CALL TO THE CORRECT PARAMETERS
+stimOffVec = 1;stimOnVec = 2;moveVec = 3;
 designVec = 1:designParams;
 bVec = designParams+1:designParams+gaborParams;
 cVec = bVec(end)+1:bVec(end)+gaborParams*(numFilters-1);
@@ -202,12 +207,19 @@ Bounds(precisionVec,:) = alphaBounds;
 
 clear nonLinBounds gaborBounds historyMoveBaseBounds alphaBounds designBounds;
 
-designPrior = zeros(length(designVec),2);
+% INITIALIZE PRIORS
 
+designPrior = zeros(length(designVec),2);
 gaborPrior = zeros(gaborParams,2);
 gaborPrior(1,:) = [0,0];
+gaborPrior(2,:) = [0,1];
+gaborPrior(3,:) = [0,1000]; % normal
+gaborPrior(4,:) = [0,1000]; % normal
+gaborPrior(5,:) = [20,15]; % gamma
+gaborPrior(6,:) = [19,13]; % gamma
 
-nonLinPrior = zeros(nonLinParams,2);
+
+nonLinPrior = [0,0;1,0;2,0]; % base slope rise
 precisionPrior = repmat([1e-3,1e3],[precisionParams,1]);
 
 numIter = 16e5;burnIn = 1e5;skipRate = 1000;
@@ -233,10 +245,8 @@ for zz=1:totalUnits
         
        
         %MCMC intialization
-        priorParams = zeros(numParameters,2);
-        priorParams(stimOffVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
-        priorParams(stimOnVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
-        priorParams(moveVec,:) = [0,0];
+        designPrior(stimOffVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
+        designPrior(stimOnVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
 
         parameterVec = zeros(numParameters,numIter);
         posteriorProb = zeros(numIter,1);
