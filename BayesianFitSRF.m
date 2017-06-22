@@ -176,7 +176,9 @@ Bounds = zeros(numParameters,2);
 designBounds = repmat([-200,200],[designParams,1]); % two baselines, history, and movement
 
 % determine bounds for spatial frequency
-spatFreqBounds = [1e-2,0.5]; %cpd, for the mouse visual system
+spatFreqBounds = [0.012,0.5]; %cpd, for the mouse visual system,
+                 % the first value is 1/80 cpd or 1 cycle per 80 degrees,
+                 % this is beyond what we can even display on our screen
 
 mmpercycle = tan((1./spatFreqBounds).*pi./180).*(DistToScreen*10);
 cppBounds = (1/mmpercycle)*conv_factor; % cycles per pixel Bounds
@@ -188,7 +190,7 @@ gaborBounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
 gaborBounds(4,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
 gaborBounds(5,:) = [1,2000]; % standard deviation x
 gaborBounds(6,:) = [1,2000]; % standard deviation y
-gaborBounds(7,:) = ; % spatial frequency
+gaborBounds(7,:) = cppBounds; % spatial frequency
 gaborBounds(8,:) = [-Inf,Inf]; %  orientation theta
 gaborBounds(9,:) = [-Inf,Inf]; % phase shift phi
 
@@ -220,6 +222,9 @@ clear nonLinBounds gaborBounds historyMoveBaseBounds alphaBounds designBounds;
 designPrior = zeros(length(designVec),2);
 
 spatFreqPrior = [2.6667,0.03]; % gamma, see Stryker 2008 J Neuro, Fig. 6A
+temp = max(gamrnd(spatFreqPrior(1),spatFreqPrior(2),[5000,1]),spatFreqBounds(1));
+temp = (1./(tan((1./temp).*pi./180).*(DistToScreen*10)))*conv_factor;
+cppBounds = mle(temp,'distribution','gamma');
 
 gaborPrior = zeros(gaborParams,2);
 gaborPrior(1,:) = [0,0]; % normal, height of gabor, variance is a precision parameter
@@ -228,7 +233,7 @@ gaborPrior(3,:) = [0,1000]; % normal, xc
 gaborPrior(4,:) = [0,1000]; % normal, yc
 gaborPrior(5,:) = [20,15]; % gamma, std x
 gaborPrior(6,:) = [19,13]; % gamma, std y
-gaborPrior(7,:) = []; % gamma, spatial frequency converted to units of pixels
+gaborPrior(7,:) = cppBounds; % gamma, spatial frequency converted to units of pixels
 gaborPrior(8,:) = [0,0.5]; % von mises, gabor orientation (sinusoidal part)
 gaborPrior(9,:) = [0,0.5]; % von mises, phase phi
 
