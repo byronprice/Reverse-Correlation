@@ -7,7 +7,7 @@ function [PosteriorSamples,PosteriorMean,PosteriorInterval,Likelihood] =...
 %  MCMC
 
 % declare global variables
-global numStimuli totalMillisecs pointProcessStimTimes h ...
+global numStimuli totalMillisecs pointProcessStimTimes ...
     unbiasedS numParameters designParams ...
     movement X Y gaborFun nonLinFun spikeTrain;
 % read in the .plx file
@@ -222,7 +222,7 @@ clear nonLinBounds gaborBounds historyMoveBaseBounds alphaBounds designBounds;
 designPrior = zeros(length(designVec),2);
 
 spatFreqPrior = [2.6667,0.03]; % gamma, see Stryker 2008 J Neuro, Fig. 6A
-temp = max(gamrnd(spatFreqPrior(1),spatFreqPrior(2),[5000,1]),spatFreqBounds(1));
+temp = max(gamrnd(spatFreqPrior(1),spatFreqPrior(2),[5000,1]),0);
 temp = (1./(tan((1./temp).*pi./180).*(DistToScreen*10)))*conv_factor;
 cppBounds = mle(temp,'distribution','gamma');
 
