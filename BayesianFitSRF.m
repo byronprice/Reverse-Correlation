@@ -3,6 +3,7 @@ function [PosteriorSamples,PosteriorMean,PosteriorInterval,Likelihood] =...
 %BayesianFitSRF.m
 %  Use data from a receptive-field mapping experiment and fit a Gabor model
 %   to obtain the spatial receptive field for cells in V1
+%  Images are displayed in image coordinates
 %  MCMC
 
 % declare global variables
@@ -23,9 +24,9 @@ load(EphysFileName,'nunits1','allts','adfreq','allad','svStrobed','tsevs')
 load(StimulusFileName)
 
 gaborFun = @(x,y,B,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
-    B.*exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
-    ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
-    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)-sin(theta-pi/2).*(y-yc))-phi);
+    B.*exp(-((x-xc).*cos(A)+(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
+    (-(x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
+    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc))-phi);
 
 %nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
 nonLinFun = @(x,base,slope,rise) rise./(1+exp(-(x-base).*slope));
@@ -43,10 +44,10 @@ elseif size(effectivePixels,2) == 2
     DIM(2) = effectivePixels(1);
 end
     
-xaxis = linspace(-screenPix_to_effPix*DIM(2)/2,...
-    screenPix_to_effPix*DIM(2)/2,DIM(2));
-yaxis = linspace(-screenPix_to_effPix*DIM(1)/4,...
-    3*screenPix_to_effPix*DIM(1)/4,DIM(1));
+xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
+    round(screenPix_to_effPix*DIM(2)/2),DIM(2));
+yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
+    -round(screenPix_to_effPix*DIM(1)/4)+1,DIM(1));
 
 [X,Y] = meshgrid(xaxis,yaxis);
 
@@ -166,23 +167,30 @@ numParameters = designParams+gaborParams*numFilters+nonLinParams+precisionParams
 % FUNCTIONS THAT WILL CALLED
 logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
 logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
-logVonMises = @(x,k,mu) k.*cos(x-mu)-log(besseli(0,k));
+logVonMises = @(x,k,mu) k.*cos(x-mu);% -log(besseli(0,k)); ... last part does
+                                       % not depend on the data
 
 % INTIALIZE BOUNDS
 Bounds = zeros(numParameters,2);
 
 designBounds = repmat([-200,200],[designParams,1]); % two baselines, history, and movement
 
+% determine bounds for spatial frequency
+spatFreqBounds = [1e-2,0.5]; %cpd, for the mouse visual system
+
+mmpercycle = tan((1./spatFreqBounds).*pi./180).*(DistToScreen*10);
+cppBounds = (1/mmpercycle)*conv_factor; % cycles per pixel Bounds
+
 gaborBounds = zeros(gaborParams,2);
 gaborBounds(1,:) = [-5000,5000]; % B for height of gabor
-gaborBounds(2,:) = [-pi,pi]; % A orientation of Gabor
+gaborBounds(2,:) = [-Inf,Inf]; % A orientation of Gabor
 gaborBounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
 gaborBounds(4,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
 gaborBounds(5,:) = [1,2000]; % standard deviation x
 gaborBounds(6,:) = [1,2000]; % standard deviation y
-gaborBounds(7,:) = [0,100]; % spatial frequency
-gaborBounds(8,:) = [-pi,pi]; %  orientation theta
-gaborBounds(9,:) = [-pi,pi]; % phase shift phi
+gaborBounds(7,:) = ; % spatial frequency
+gaborBounds(8,:) = [-Inf,Inf]; %  orientation theta
+gaborBounds(9,:) = [-Inf,Inf]; % phase shift phi
 
 nonLinBounds = zeros(nonLinParams,2);
 nonLinBounds(1,:) = [-1000,1000]; % sigmoid base
@@ -210,13 +218,19 @@ clear nonLinBounds gaborBounds historyMoveBaseBounds alphaBounds designBounds;
 % INITIALIZE PRIORS
 
 designPrior = zeros(length(designVec),2);
+
+spatFreqPrior = [2.6667,0.03]; % gamma, see Stryker 2008 J Neuro, Fig. 6A
+
 gaborPrior = zeros(gaborParams,2);
-gaborPrior(1,:) = [0,0];
-gaborPrior(2,:) = [0,1];
-gaborPrior(3,:) = [0,1000]; % normal
-gaborPrior(4,:) = [0,1000]; % normal
-gaborPrior(5,:) = [20,15]; % gamma
-gaborPrior(6,:) = [19,13]; % gamma
+gaborPrior(1,:) = [0,0]; % normal, height of gabor, variance is a precision parameter
+gaborPrior(2,:) = [0,1]; % von mises(mu,k), orientation of the exponential part of gabor
+gaborPrior(3,:) = [0,1000]; % normal, xc
+gaborPrior(4,:) = [0,1000]; % normal, yc
+gaborPrior(5,:) = [20,15]; % gamma, std x
+gaborPrior(6,:) = [19,13]; % gamma, std y
+gaborPrior(7,:) = []; % gamma, spatial frequency converted to units of pixels
+gaborPrior(8,:) = [0,0.5]; % von mises, gabor orientation (sinusoidal part)
+gaborPrior(9,:) = [0,0.5]; % von mises, phase phi
 
 
 nonLinPrior = [0,0;1,0;2,0]; % base slope rise

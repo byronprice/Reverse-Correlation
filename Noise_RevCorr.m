@@ -1,8 +1,7 @@
 function [] = Noise_RevCorr(AnimalName,NoiseType)
 %Noise_RevCorr.m
-%   Display a series of white noise stimuli to infer the receptive fields
-%    of neurons using reverse correlation.
-%    See Smyth et al. 2003 Receptive Field Organization ...
+%   Display a series of colored noise stimuli to infer the receptive fields
+%    See eg Smyth et al. 2003 Receptive Field Organization ...
 %
 % Briefly, if the receptive field for a given neuron is described by a
 %  p-by-1 vector (p being the number of pixels), f, and the stimuli described
@@ -15,6 +14,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %  stimulus lasting flipInterval msec, followed by flipInterval msec of flat 
 %  grey.  The stimuli will be output as the matrix S, along with the 
 %  timeStamps for when they were generated.
+% Images are displayed on the screen in Image Coordinates
 %
 %INPUT: AnimalName - unique identifier for the animal as a number, e.g.
 %            12345
@@ -39,7 +39,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/05/18
+% Updated: 2017/06/21
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -82,7 +82,6 @@ conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
-screenPix_to_effPix = 10;
 maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 

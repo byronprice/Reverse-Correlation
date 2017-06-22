@@ -1,15 +1,15 @@
 % GenerateMovies.m
 
-for jj=12:100
+for jj=1:100
     beta = -3;spaceExp = 2;timeExp = 2;
     movie_FrameRate = 60; % hz
-    movieTime_Seconds = 5*60;
+    movieTime_Seconds = 10;
     numStimuli = movieTime_Seconds*movie_FrameRate;
-    maxPix = 2350;
-    minPix = 1425;
+    maxPix = 2360;
+    minPix = 1440;
     mmPerPixel = 0.2363;
     
-    screenPix_to_effPix = 25;
+    screenPix_to_effPix = 10;
     effectivePixels = [minPix/screenPix_to_effPix,maxPix/screenPix_to_effPix];
     
     % samplingSpace = screenPix_to_effPix*mmPerPixel/10;
@@ -53,17 +53,22 @@ for jj=12:100
     unbiasedS = real(ifftn(fftn(double(S))./S_f));
     clear X Y S_f;
     S = S(1:DIM(1),1:DIM(2),1:numStimuli);
-    unbiasedS = unbiasedS(1:DIM(1),1:DIM(2),1:numStimuli);
+    temp = unbiasedS(1:DIM(1),1:DIM(2),1:numStimuli);
     
-    fileName = sprintf('5Min_PinkNoiseMovie%d.mat',jj);
+    a = 0;b = 255;
+    currentMin = min(temp(:));currentMax = max(temp(:));
+    temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
+    
+    unbiasedS = uint8(temp);
+    
+    fileName = sprintf('10Sec_PinkNoiseMovie%d.mat',jj);
     save(fileName,'S','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
         'mmPerPixel','numStimuli','movieTime_Seconds','DIM');
     
-    fileName = sprintf('5Min_UnbiasedPinkNoiseMovie%d.mat',jj);
+    fileName = sprintf('10Sec_UnbiasedPinkNoiseMovie%d.mat',jj);
     save(fileName,'unbiasedS','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
         'movieTime_Seconds','mmPerPixel','DIM');
     
-    pause(2);clearvars -except jj;pause(2);
 end
 % from Dong 2001 ... Spatiotemporal Inseparability of Natural Images and
 %   Visual Sensitivities
