@@ -9,7 +9,9 @@ for jj=1:100
     minPix = 1440;
     mmPerPixel = 0.2363;
     
-    screenPix_to_effPix = 10;
+    screenPix_to_effPix = 12;
+    maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
+    minPix = minPix-mod(minPix,screenPix_to_effPix);
     effectivePixels = [minPix/screenPix_to_effPix,maxPix/screenPix_to_effPix];
     
     % samplingSpace = screenPix_to_effPix*mmPerPixel/10;
