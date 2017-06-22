@@ -253,7 +253,7 @@ PosteriorInterval = zeros(totalUnits,numParameters,2);
 for zz=1:totalUnits
         % ORGANIZE DATA
         spikeTrain = pointProcessSpikes(:,zz);
-        Design = zeros(length(spikeTrain),historyParams+moveParams+baseParams);
+        Design = zeros(length(spikeTrain),designParams);
         for kk=1:historyParams
             temp = y;shift = zeros(kk,1);
             history = [shift;temp];
@@ -291,6 +291,30 @@ for zz=1:totalUnits
         parameterVec = zeros(numParameters,numStarts);
         posteriorProb = zeros(numStarts,1);
         
+        updateMu = zeros(numParameters,1);
+        updateMu(designVec) = fullB+normrnd(0,1,[designParams,1]);
+        count = designVec(end);
+        for jj=1:numFilters
+            updateMu(count+1) = normrnd(0,1);
+            updateMu(count+2) = normrnd(0,pi/2);
+            updateMu(count+3) = normrnd(0,500);
+            updateMu(count+4) = normrnd(0,500);
+            updateMu(count+5) = gamrnd(gaborPrior(5,1),gaborPrior(5,2));
+            updateMu(count+6) = gamrnd(gaborPrior(6,1),gaborPrior(6,2));
+            updateMu(count+7) = gamrnd(gaborPrior(7,1),gaborPrior(7,2));
+            updateMu(count+8) = normrnd(0,pi/2);
+            updateMu(count+9) = normrnd(0,pi/2);
+            count = count+gaborParams;
+        end
+        updateMu(nonLinVec) = [normrnd(0,1);gamrnd(4,1/4);gamrnd(8,1/4)];
+        updateMu(precisionVec) = log(gamrnd(1,1,[precisionParams,1]));
+        
+        updateMu = min(max(updateMu,Bounds(:,1)),Bounds(:,2));
+        
+        sigma = diag(abs(updateMu));
+        
+        updateParam = 0.1;
+        
         proposalMu = zeros(numParameters,1);
         for ii=1:numStarts
             parameterVec(designVec,ii) = fullB;
@@ -312,7 +336,9 @@ for zz=1:totalUnits
             
             parameterVec(:,ii) = min(max(parameterVec(:,ii),Bounds(:,1)),Bounds(:,2));
             
-            loglikelihood = ;
+            
+            mu = exp(Design*parameterVec(designVec,ii));
+            loglikelihood = spikeTrain.*log(mu)-mu;
             logprior = ;
             
             posteriorProb(ii) = loglikelihood+logprior;
