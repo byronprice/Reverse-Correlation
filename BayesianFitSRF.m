@@ -176,11 +176,11 @@ Bounds = zeros(numParameters,2);
 designBounds = repmat([-200,200],[designParams,1]); % two baselines, history, and movement
 
 % determine bounds for spatial frequency
-spatFreqBounds = [0.012,0.5]; %cpd, for the mouse visual system,
-                 % the first value is 1/80 cpd or 1 cycle per 80 degrees,
+spatFreqBounds = [1/120,0.5]; %cpd, for the mouse visual system,
+                 % the first value is 1/120 cpd or 1 cycle per 120 degrees,
                  % this is beyond what we can even display on our screen
 
-mmpercycle = tan((1./spatFreqBounds).*pi./180).*(DistToScreen*10);
+mmpercycle = tan(((1./spatFreqBounds)./2).*pi./180).*(DistToScreen*10*2);
 cppBounds = (1/mmpercycle)*conv_factor; % cycles per pixel Bounds
 
 gaborBounds = zeros(gaborParams,2);
@@ -223,7 +223,7 @@ designPrior = zeros(length(designVec),2);
 
 spatFreqPrior = [2.6667,0.03]; % gamma, see Stryker 2008 J Neuro, Fig. 6A
 temp = max(gamrnd(spatFreqPrior(1),spatFreqPrior(2),[5000,1]),0);
-temp = (1./(tan((1./temp).*pi./180).*(DistToScreen*10)))*conv_factor;
+temp = (1./(tan(((1./temp)./2).*pi./180).*(2*DistToScreen*10)))*conv_factor;
 cppBounds = mle(temp,'distribution','gamma');
 
 gaborPrior = zeros(gaborParams,2);
