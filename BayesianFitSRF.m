@@ -24,9 +24,9 @@ load(EphysFileName,'nunits1','allts','adfreq','allad','svStrobed','tsevs')
 load(StimulusFileName)
 
 gaborFun = @(x,y,B,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
-    B.*exp(-((x-xc).*cos(A)+(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
-    (-(x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
-    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)+sin(theta-pi/2).*(y-yc))-phi);
+    B.*exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
+    ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
+    .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)-sin(theta-pi/2).*(y-yc))-phi);
 
 %nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
 nonLinFun = @(x,base,slope,rise) rise./(1+exp(-(x-base).*slope));
@@ -91,8 +91,10 @@ allts = temp;
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-if length(strobeData) ~= numStimuli
+if length(strobeData) ~= numStimuli && unique(svStrobed) == 0
     strobeData = strobeData(1:2:end);
+elseif length(unique(svStrobed)) == 3
+    strobeData = strobeData(svStrobed==1);
 end
 
 % GATHER LFP AND MOVEMENT DATA
@@ -131,18 +133,17 @@ timeMultiplier = 1000;
 totalMillisecs = round(totalTime*timeMultiplier);
 
 stimTimes = round(strobeData.*timeMultiplier);
-pointProcessStimTimes = ones(totalMillisecs,numStimuli,'single');
+stimTimeIndex = ones(totalMillisecs,1,'single');
 
 if exist('flipIntervals','var')==1
     flipInterval = mean(flipIntervals);
 end
 
 for kk=1:numStimuli
-   pointProcessStimTimes(stimTimes(kk)+0.05*timeMultiplier:stimTimes(kk)+0.15*timeMultiplier,kk) = 1;
+   stimTimeIndex(stimTimes(kk)+0.05*timeMultiplier:stimTimes(kk)+0.15*timeMultiplier) = kk;
 end
 
-temp = sum(pointProcessStimTimes,2);
-stimOn = temp>0;stimOff = 1-stimOn;
+stimOn = stimTimeIndex>0;stimOff = 1-stimOn;
 
 pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 
@@ -167,13 +168,17 @@ numParameters = designParams+gaborParams*numFilters+nonLinParams+precisionParams
 % FUNCTIONS THAT WILL CALLED
 logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
 logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
+logGammaPDFMeanDisperse = @(x,mu,phi) (x.*(-1/mu)-log(mu)).*phi+log(phi)*phi+(phi-1).*log(x)-log(gamma(phi)); 
+                        % is 1/dispersion ... similar to precision,
+                        % high phi == low variance 
 logVonMises = @(x,k,mu) k.*cos(x-mu);% -log(besseli(0,k)); ... last part does
                                        % not depend on the data
+logNormPDF = @(x,mu,std) -0.5*log(std*std)-(x-mu).*(x-mu)./(2*std*std);
 
 % INTIALIZE BOUNDS
 Bounds = zeros(numParameters,2);
 
-designBounds = repmat([-200,200],[designParams,1]); % two baselines, history, and movement
+designBounds = repmat([-1000,1000],[designParams,1]); % two baselines, history, and movement
 
 % determine bounds for spatial frequency
 spatFreqBounds = [1/120,0.5]; %cpd, for the mouse visual system,
@@ -195,11 +200,11 @@ gaborBounds(8,:) = [-Inf,Inf]; %  orientation theta
 gaborBounds(9,:) = [-Inf,Inf]; % phase shift phi
 
 nonLinBounds = zeros(nonLinParams,2);
-nonLinBounds(1,:) = [-1000,1000]; % sigmoid base
-nonLinBounds(2,:) = [0,200]; % sigmoid slope
-nonLinBounds(3,:) = [0,200]; % sigmoid rise
+nonLinBounds(1,:) = [-Inf,Inf]; % sigmoid base
+nonLinBounds(2,:) = [0,5000]; % sigmoid slope
+nonLinBounds(3,:) = [0,5000]; % sigmoid rise
 
-alphaBounds = repmat([-Inf,Inf],[precisionParams,1]); % for any precision parameter
+alphaBounds = repmat([-Inf,Inf],[precisionParams,1]); % for log of any precision parameter
 
 % INITIALIZE INDEX VECTORS FOR EASY CALL TO THE CORRECT PARAMETERS
 stimOffVec = 1;stimOnVec = 2;moveVec = 3;
@@ -224,7 +229,7 @@ designPrior = zeros(length(designVec),2);
 spatFreqPrior = [2.6667,0.03]; % gamma, see Stryker 2008 J Neuro, Fig. 6A
 temp = max(gamrnd(spatFreqPrior(1),spatFreqPrior(2),[5000,1]),0);
 temp = (1./(tan(((1./temp)./2).*pi./180).*(2*DistToScreen*10)))*conv_factor;
-cppBounds = mle(temp,'distribution','gamma');
+cppPrior = mle(temp,'distribution','gamma');
 
 gaborPrior = zeros(gaborParams,2);
 gaborPrior(1,:) = [0,0]; % normal, height of gabor, variance is a precision parameter
@@ -233,12 +238,11 @@ gaborPrior(3,:) = [0,1000]; % normal, xc
 gaborPrior(4,:) = [0,1000]; % normal, yc
 gaborPrior(5,:) = [20,15]; % gamma, std x
 gaborPrior(6,:) = [19,13]; % gamma, std y
-gaborPrior(7,:) = cppBounds; % gamma, spatial frequency converted to units of pixels
+gaborPrior(7,:) = cppPrior; % gamma, spatial frequency converted to units of pixels
 gaborPrior(8,:) = [0,0.5]; % von mises, gabor orientation (sinusoidal part)
 gaborPrior(9,:) = [0,0.5]; % von mises, phase phi
 
-
-nonLinPrior = [0,0;1,0;2,0]; % base slope rise
+nonLinPrior = [0,0;1,0;2,0]; % base slope rise ... slope and rise must be positive
 precisionPrior = repmat([1e-3,1e3],[precisionParams,1]);
 
 numIter = 16e5;burnIn = 1e5;skipRate = 1000;
@@ -249,28 +253,81 @@ PosteriorInterval = zeros(totalUnits,numParameters,2);
 for zz=1:totalUnits
         % ORGANIZE DATA
         spikeTrain = pointProcessSpikes(:,zz);
-        historyDesign = zeros(length(spikeTrain),historyParams+2);
-        for kk=1:historyParams-1
+        Design = zeros(length(spikeTrain),historyParams+moveParams+baseParams);
+        for kk=1:historyParams
             temp = y;shift = zeros(kk,1);
             history = [shift;temp];
-            historyDesign(:,kk+1) = history(1:(end-kk));
+            Design(:,kk+moveParams+baseParams) = history(1:(end-kk));
         end
-        historyDesign(:,1) = stimOff;
-        historyDesign(:,end-1) = stimOn;
-        historyDesign(:,end) = movement;
+        Design(:,stimOffVec) = stimOff;
+        Design(:,stimOnVec) = stimOn;
+        Design(:,moveVec) = movement;
         
-        spikeTrain = spikeTrain(historyParams:end);
-        historyDesign = historyDesign(historyParams:end,:);
+        spikeTrain = spikeTrain(historyParams+1:end);
+        Design = Design(historyParams+1:end,:);
+        stimTimes = stimTimeIndex(historyParams+1:end);
         
+        numBasis = 20;
+        basisFuns = zeros(historyParams,numBasis);
+        centerPoints = linspace(1,historyParams,numBasis);
+        basisStd = 5;
+        for ii=1:numBasis
+            time = 1:historyParams;
+            temp = exp(-(time-centerPoints(ii)).^2./(2*basisStd^2));
+            temp = temp./max(temp);
+            basisFuns(:,ii) = temp';
+        end
+        
+        X = [Design(:,1:moveParams+baseParams),Design(:,moveParams+baseParams+1:end)*basisFuns];
+        [b,~,~] = glmfit(X,spikeTrain,'poisson','constant','off');
+        
+        fullB = [b(1:moveParams+baseParams);(b(moveParams+baseParams+1:end)'*basisFuns')'];
        
         %MCMC intialization
         designPrior(stimOffVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
         designPrior(stimOnVec,:) = [sum(spikeTrain)/length(spikeTrain),0];
-
-        parameterVec = zeros(numParameters,numIter);
-        posteriorProb = zeros(numIter,1);
         
-        parameterVec(:,1) = max(Bounds(:,1),min(parameterVec(:,1),Bounds(:,2)));
+        numStarts = 5000;
+        parameterVec = zeros(numParameters,numStarts);
+        posteriorProb = zeros(numStarts,1);
+        
+        proposalMu = zeros(numParameters,1);
+        for ii=1:numStarts
+            parameterVec(designVec,ii) = fullB;
+            count = designVec(end);
+            for jj=1:numFilters
+                parameterVec(count+1,ii) = normrnd(0,1);
+                parameterVec(count+2,ii) = normrnd(0,pi/2);
+                parameterVec(count+3,ii) = normrnd(0,500);
+                parameterVec(count+4,ii) = normrnd(0,500);
+                parameterVec(count+5,ii) = gamrnd(gaborPrior(5,1),gaborPrior(5,2));
+                parameterVec(count+6,ii) = gamrnd(gaborPrior(6,1),gaborPrior(6,2));
+                parameterVec(count+7,ii) = gamrnd(gaborPrior(7,1),gaborPrior(7,2));
+                parameterVec(count+8,ii) = normrnd(0,pi/2);
+                parameterVec(count+9,ii) = normrnd(0,pi/2);
+                count = count+gaborParams;
+            end
+            parameterVec(nonLinVec,ii) = [normrnd(0,1);gamrnd(4,1/4);gamrnd(8,1/4)];
+            parameterVec(precisionVec,ii) = log(gamrnd(1,1,[precisionParams,1]));
+            
+            parameterVec(:,ii) = min(max(parameterVec(:,ii),Bounds(:,1)),Bounds(:,2));
+            
+            loglikelihood = ;
+            logprior = ;
+            
+            posteriorProb(ii) = loglikelihood+logprior;
+            loglambda = log(2.38*2.38/numParameters);
+            for jj=1:500
+                pStar = parameterVec(:,ii)+mvnrnd(proposalMu,exp(loglambda)*sigma)';
+                
+                if sum(pStar<=Bounds(:,1)) == 0 && sum(pStar>=Bounds(:,2)) == 0
+                    
+                else
+                    
+                end
+                
+            end
+        end
         
         likelihoodXprev = GetLikelihood(parameterVec(:,1));
         
@@ -291,26 +348,25 @@ for zz=1:totalUnits
                     likelihoodXprev = likelihoodXstar;
                 else
                     parameterVec(:,iter) = parameterVec(:,iter-1);
-                    rejectRate = rejectRate+1;
                 end
             end
         end
         
+        parameterVec = zeros(numParameters,(numIter-burnIn)/skipRate);
+        posteriorProb = zeros((numIter-burnIn)/skipRate,1);
         
-        PosteriorSamples(zz,:,:) = parameterVec(:,burnIn:skipRate:numIter);
+        
+        
+        PosteriorSamples(zz,:,:) = parameterVec;
         
         alpha = 0.05;
         
         numColumns = 4;
         numRows = floor(numParameters/numColumns)+mod(numParameters,numColumns);
-        for ii=1:numParameters
-           subplot(numRows,numColumns,ii);
-           histogram(squeeeze(PosteriorSamples(zz,ii,:)));
-           title('Marginal Posterior, Parameter %d',ii);
-           PosteriorMean(zz,ii) = mean(PosteriorSamples(ii,:));
-           PosteriorInterval(zz,ii,:) = quantile(squeeze(PosteriorSamples(zz,ii,:)),...
-               [alpha/2,1-alpha/2]);
-        end
+       figure();
+       for ii=1:numParameters
+           subplot(numRows,numColumns,ii);histogram(PosteriorSamples(zz,:,:));
+       end
 end
 
 

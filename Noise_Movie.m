@@ -10,6 +10,8 @@ function [] = Noise_Movie(AnimalName)
 %            12345
 %
 %       see file MovieNoiseVars.mat for more changeable presets
+%         movies previously made and saved as 10Sec_PinkNoiseMovie1.mat
+%         etc.
 %
 %OUTPUT: file named 'NoiseStimNoiseTypeDate_AnimalName.mat' , e.g. 
 %          NoiseStimpink20160718_12345.mat
@@ -27,7 +29,7 @@ function [] = Noise_Movie(AnimalName)
 %
 % Created: 2017/03/24, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/05/18
+% Updated: 2017/06/22
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -40,16 +42,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-DistToScreen = 25; 
-
-movieNum = random('Discrete Uniform',78);
-
-fileName = sprintf('5Min_PinkNoiseMovie%d.mat',movieNum);
-load(fileName);
-
-[vertPix,horzPix,numStimuli] = size(S);
-
-fprintf('\nEstimated time is %3.2f minutes.',(3*movieTime_Seconds+180)/60);
+fprintf('\nEstimated time is %3.2f minutes.',(numMoviesToDisplay*movieTime_Seconds*2+3*30)/60);
 WaitSecs(1);
 
 % Choose screen with maximum id - the secondary display:
@@ -83,72 +76,48 @@ ifi = Screen('GetFlipInterval', win);deltaIFI = ifi/2;
 % WaitTimes = WaitTime+exprnd(0.25,[numStimuli,1]);
 flipInterval = 1/movie_FrameRate-deltaIFI;
 
+movieNums = random('Discrete Uniform',250,[numMoviesToDisplay,1]);
+
 usb.startRecording;usb.strobeEventWord(0);
-WaitSecs(30);
-tt = 1;
-vbl = Screen('Flip', win);
-while tt <= numStimuli
-%     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
-    % Img = S(:,:,tt);Img = Img(newInds);
-    % Convert it to a texture 'tex':
-    tex = Screen('MakeTexture',win,S(:,:,tt));
-    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
-                                        % 1 is bilinear filter
-    vbl = Screen('Flip',win,vbl+flipInterval);usb.strobeEventWord(1);
-    Screen('Close',tex);
-    tt = tt+1;
+WaitSecs(20);
+vbl = Screen('Flip',win);
+for ii=1:numMoviesToDisplay
+    index = movieNums(ii);
+    load(sprintf('10Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
+    tt = 1;
+    vbl = Screen('Flip', win,vbl+10);
+    while tt <= numStimuli
+        %     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
+        % Img = S(:,:,tt);Img = Img(newInds);
+        % Convert it to a texture 'tex':
+        tex = Screen('MakeTexture',win,S(:,:,tt));
+        Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
+        % 1 is bilinear filter
+        vbl = Screen('Flip',win,vbl+flipInterval);usb.strobeEventWord(index);
+        Screen('Close',tex);
+        tt = tt+1;
+    end
+    vbl = Screen('Flip',win);usb.strobeEventWord(0);
+    if mod(ii,30) == 0
+        vbl = Screen('Flip',win,vbl+20);
+    end
 end
 Screen('Flip',win);usb.strobeEventWord(0);
-WaitSecs(30);
+WaitSecs(10);
 
-tt = 1;
-vbl = Screen('Flip', win);
-while tt <= numStimuli
-%     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
-    % Img = S(:,:,tt);Img = Img(newInds);
-    % Convert it to a texture 'tex':
-    tex = Screen('MakeTexture',win,S(:,:,tt));
-    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
-                                        % 1 is bilinear filter
-    vbl = Screen('Flip',win,vbl+flipInterval);usb.strobeEventWord(2);
-    Screen('Close',tex);
-    tt = tt+1;
-end
-Screen('Flip',win);usb.strobeEventWord(0);
-WaitSecs(30);
-movieNum2 = random('Discrete Uniform',78);
-
-fileName = sprintf('5Min_PinkNoiseMovie%d.mat',movieNum2);
-load(fileName);
-
-tt = 1;
-vbl = Screen('Flip', win);
-while tt <= numStimuli
-%     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
-    % Img = S(:,:,tt);Img = Img(newInds);
-    % Convert it to a texture 'tex':
-    tex = Screen('MakeTexture',win,S(:,:,tt));
-    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
-                                        % 1 is bilinear filter
-    vbl = Screen('Flip',win,vbl+flipInterval);usb.strobeEventWord(3);
-    Screen('Close',tex);
-    tt = tt+1;
-end
-Screen('Flip',win);usb.strobeEventWord(0);
-WaitSecs(5);
 usb.stopRecording;
 % Close window
 Screen('CloseAll');
 Priority(0);
 
-movieNums = [movieNum,movieNum,movieNum2];
+movieType = '10Sec_PinkNoise';
 
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat','pink',Date,AnimalName);
-save(filename,'numStimuli','movie_FrameRate','movieTime_Seconds',...
+save(filename,'numMoviesToDisplay','movie_FrameRate','movieTime_Seconds',...
     'DistToScreen','screenPix_to_effPix','minPix','maxPix',...
-    'conv_factor','beta','movieNums','destRect');
+    'conv_factor','movieNums','destRect','movieType');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
