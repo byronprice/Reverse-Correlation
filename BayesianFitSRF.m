@@ -165,7 +165,8 @@ precisionParams = numFilters+moveParams+baseParams+nonLinParams;
 designParams = historyParams+moveParams+baseParams;
 numParameters = designParams+gaborParams*numFilters+nonLinParams+precisionParams;
 
-% FUNCTIONS THAT WILL CALLED
+% FUNCTIONS THAT WILL BE USED (BUT NOT CALLED ... MATLAB IS SLOW AF WITH
+%  FUNCTION CALLS)
 logPoissonPDF = @(y,mu) y.*log(mu)-mu; % assumes exp(mu) ... true is sum[i=1:N] {y.*log(mu)-mu}
 logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
 logGammaPDFMeanDisperse = @(x,mu,phi) (x.*(-1/mu)-log(mu)).*phi+log(phi)*phi+(phi-1).*log(x)-log(gamma(phi)); 
@@ -209,8 +210,10 @@ alphaBounds = repmat([-Inf,Inf],[precisionParams,1]); % for log of any precision
 % INITIALIZE INDEX VECTORS FOR EASY CALL TO THE CORRECT PARAMETERS
 stimOffVec = 1;stimOnVec = 2;moveVec = 3;
 designVec = 1:designParams;
+historyVec = moveVec+1:designParams;
 bVec = designParams+1:designParams+gaborParams;
 cVec = bVec(end)+1:bVec(end)+gaborParams*(numFilters-1);
+cPrecisionVec = cVec(1:gaborParams:end);
 nonLinVec = cVec(end)+1:cVec(end)+nonLinParams;
 precisionVec = nonLinVec(end)+1:nonLinVec(end)+precisionParams;
 
@@ -246,6 +249,9 @@ nonLinPrior = [0,0;1,0;2,0]; % base slope rise ... slope and rise must be positi
 precisionPrior = repmat([1e-3,1e3],[precisionParams,1]);
 
 numIter = 16e5;burnIn = 1e5;skipRate = 1000;
+fullImSize = DIM(1)*DIM(2);
+
+pi2 = pi/2;
 
 PosteriorSamples = zeros(totalUnits,numParameters,length(burnIn+1:skipRate:numIter));
 PosteriorMean = zeros(totalUnits,numParameters);
@@ -266,6 +272,8 @@ for zz=1:totalUnits
         spikeTrain = spikeTrain(historyParams+1:end);
         Design = Design(historyParams+1:end,:);
         stimTimes = stimTimeIndex(historyParams+1:end);
+        
+        designLen = length(Design);
         
         numBasis = 20;
         basisFuns = zeros(historyParams,numBasis);
@@ -321,14 +329,14 @@ for zz=1:totalUnits
             count = designVec(end);
             for jj=1:numFilters
                 parameterVec(count+1,ii) = normrnd(0,1);
-                parameterVec(count+2,ii) = normrnd(0,pi/2);
-                parameterVec(count+3,ii) = normrnd(0,500);
-                parameterVec(count+4,ii) = normrnd(0,500);
+                parameterVec(count+2,ii) = normrnd(0,pi2);
+                parameterVec(count+3,ii) = normrnd(gaborPrior(3,1),gaborPrior(3,2)/2);
+                parameterVec(count+4,ii) = normrnd(gaborPrior(4,1),gaborPrior(4,2)/2);
                 parameterVec(count+5,ii) = gamrnd(gaborPrior(5,1),gaborPrior(5,2));
                 parameterVec(count+6,ii) = gamrnd(gaborPrior(6,1),gaborPrior(6,2));
                 parameterVec(count+7,ii) = gamrnd(gaborPrior(7,1),gaborPrior(7,2));
-                parameterVec(count+8,ii) = normrnd(0,pi/2);
-                parameterVec(count+9,ii) = normrnd(0,pi/2);
+                parameterVec(count+8,ii) = normrnd(0,pi2);
+                parameterVec(count+9,ii) = normrnd(0,pi2);
                 count = count+gaborParams;
             end
             parameterVec(nonLinVec,ii) = [normrnd(0,1);gamrnd(4,1/4);gamrnd(8,1/4)];
@@ -336,10 +344,48 @@ for zz=1:totalUnits
             
             parameterVec(:,ii) = min(max(parameterVec(:,ii),Bounds(:,1)),Bounds(:,2));
             
-            
-            mu = exp(Design*parameterVec(designVec,ii));
+            W = zeros(fullImSize,numFilters-1);
+            params = parameterVec(bVec,ii);
+            temp = params(1).*exp(-((x-params(3)).*cos(params(2))-(y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                ((x-params(3)).*sin(params(2))+(y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
+                .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(x-params(3))-sin(params(8)-pi2).*(y-params(4)))-params(9));
+            b = temp(:);
+            count = 1;
+            for jj=1:numFilters-1
+                params = parameterVec(cVec(count:count+8),ii);
+                temp = params(1).*exp(-((x-params(3)).*cos(params(2))-(y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                    ((x-params(3)).*sin(params(2))+(y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
+                    .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(x-params(3))-sin(params(8)-pi2).*(y-params(4)))-params(9));
+                W(:,jj) = temp(:);
+            end
+            nonLins = parameterVec(nonLinVec,ii);
+            x = ones(designLen,1);
+            for jj=1:numStimuli
+                onScreenStim = unbiasedS(jj,:)';
+                temp = 0.5*onScreenStim'*W*W'*onScreenStim+b'*onScreenStim;
+                x(stimTimes==jj) = nonLins(3)/(1+exp(-(temp-nonLins(1))*nonLins(2)));
+            end
+            mu = exp(Design*parameterVec(designVec,ii)).*x;
             loglikelihood = spikeTrain.*log(mu)-mu;
-            logprior = ;
+            
+            smoothPrior = del2(parameterVec(historyVec,ii));
+            logprior = 0.5*parameterVec(precisionVec(1),ii)-...
+                0.5*exp(parameterVec(precisionVec(1),ii))*...
+                (parameterVec(stimOnVec,ii)-designPrior(stimOnVec,1))*...
+                (parameterVec(stimOnVec,ii)-designPrior(stimOnVec,1))+...
+                0.5*parameterVec(precisionVec(2),ii)-...
+                0.5*exp(parameterVec(precisionVec(2),ii))*...
+                (parameterVec(stimOffVec,ii)-designPrior(stimOffVec,1))*...
+                (parameterVec(stimOffVec,ii)-designPrior(stimOffVec,1))+...
+                0.5*parameterVec(precisionVec(3),ii)-...
+                0.5*exp(parameterVec(precisionVec(3),ii))*parameterVec(moveVec,ii)*parameterVec(moveVec,ii)+...
+                (historyParams*0.5)*parameterVec(precisionVec(4),ii)-...
+                0.5*exp(parameterVec(precisionVec(4),ii))*(parameterVec(historyVec,ii)'*parameterVec(historyVec,ii))+...
+                (historyParams*0.5)*parameterVec(precisionVec(5),ii)-...
+                0.5*exp(parameterVec(precisionVec(5),ii))*(smoothPrior'*smoothPrior)+...
+                
+                
+                
             
             posteriorProb(ii) = loglikelihood+logprior;
             loglambda = log(2.38*2.38/numParameters);
