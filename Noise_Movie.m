@@ -84,8 +84,10 @@ vbl = Screen('Flip',win);
 for ii=1:numMoviesToDisplay
     index = movieNums(ii);
     load(sprintf('10Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
+%     S(S<85) = 0;S(S>=85 & S<169) = 127;S(S>=169) = 255;
     tt = 1;
-    vbl = Screen('Flip', win,vbl+10);
+    waitTime = 10+normrnd(0,1);
+    vbl = Screen('Flip', win,vbl+waitTime);
     while tt <= numStimuli
         %     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
         % Img = S(:,:,tt);Img = Img(newInds);
