@@ -219,8 +219,8 @@ for ii=2:burnIn
             meanSubtract = params(:,ii)-updateMu;
             updateMu = updateMu+updateParam(ii).*meanSubtract;
             %         sigma2 = sigma2+updateParam(ii).*(meanSubtract*meanSubtract'-sigma2);
-            halfSigma = halfSigma+updateParam(ii).*(triu((halfSigma^-1)*(halfSigma'*halfSigma+meanSubtract*...
-                meanSubtract')*((halfSigma^-1)')-identity)-halfSigma);
+            halfSigma = halfSigma+updateParam(ii).*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
+                meanSubtract')*((inv(halfSigma))')-identity)-halfSigma);
             sigma = halfSigma'*halfSigma;
             
             Z = inv(tril(W'*W)')'*W';
@@ -228,6 +228,7 @@ for ii=2:burnIn
             W = normc(W);
             eigenvals = diag(W'*sigma*W);
             lambda = lambda+updateParam(ii).*(exp(min(0,logA))-optimalAccept);
+            
         end
         
 %         Minv = 1./M(1:q+1:end)';

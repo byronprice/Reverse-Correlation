@@ -37,6 +37,20 @@ clear X Y S_f phi tempFFT;
 unbiasedS = unbiasedS(1:DIM(1),1:DIM(2),1:numStimuli);
 S = S(1:DIM(1),1:DIM(2),1:numStimuli);
 
+a = 0;b = 255;
+% for ii=1:numStimuli
+%    temp = unbiasedS(:,:,ii); 
+%    currentMin = min(temp(:));currentMax = max(temp(:));
+%    temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
+% %    subplot(2,1,1);imagesc(unbiasedS(:,:,ii));caxis([min(unbiasedS(:)) max(unbiasedS(:))]);
+% %    subplot(2,1,2);imagesc(temp);caxis([a b]);pause(0.1);
+%    unbiasedS(:,:,ii) = temp;
+% end
+temp = unbiasedS;
+currentMin = min(temp(:));currentMax = max(temp(:));
+unbiasedS = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
+clear temp;
+
 gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
     exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
     ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
@@ -65,6 +79,7 @@ for ii=timePoints:numStimuli
     r(ii-(timePoints-1)) = poissrnd(lambda);
     filterOutput(ii-(timePoints-1)) = gaborOutput;
     temp = unbiasedS(:,:,ii-(timePoints-1):ii);
+%     temp = S(:,:,ii-(timePoints-1):ii);
     newS(ii-(timePoints-1),:) = temp(:);
 end
 clear unbiasedS S;
