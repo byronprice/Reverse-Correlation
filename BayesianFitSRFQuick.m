@@ -202,18 +202,20 @@ cppBounds = (1./mmpercycle)*conv_factor; % cycles per pixel Bounds
 gaborBounds = zeros(gaborParams,2);
 gaborBounds(1,:) = [-1e4,1e4]; % B for height of gabor
 gaborBounds(2,:) = [-Inf,Inf]; % A orientation of Gabor
-gaborBounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
-gaborBounds(4,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
+% gaborBounds(3,:) = [min(xaxis)-50,max(xaxis)+50]; % x center
+% gaborBounds(4,:) = [min(yaxis)-50,max(yaxis)+50]; % y center
+gaborBounds(3,:) = [-Inf,Inf];
+gaborBounds(4,:) = [-Inf,Inf];
 gaborBounds(5,:) = [1,2000]; % standard deviation x
 gaborBounds(6,:) = [1,2000]; % standard deviation y
-gaborBounds(7,:) = cppBounds; % spatial frequency
+gaborBounds(7,:) = [0,Inf];%cppBounds; % spatial frequency
 gaborBounds(8,:) = [-Inf,Inf]; %  orientation theta
 gaborBounds(9,:) = [-Inf,Inf]; % phase shift phi
 
 nonLinBounds = zeros(nonLinParams,2);
 nonLinBounds(1,:) = [-Inf,Inf]; % sigmoid base
-nonLinBounds(2,:) = [0,1e4]; % sigmoid slope
-nonLinBounds(3,:) = [0,1e4]; % sigmoid rise
+nonLinBounds(2,:) = [0,Inf]; % sigmoid slope
+nonLinBounds(3,:) = [0,Inf]; % sigmoid rise
 
 precisionBounds = repmat([-Inf,Inf],[precisionParams,1]); % for any precision parameter
 
@@ -231,7 +233,7 @@ Bounds(bVec,:) = gaborBounds;
 Bounds(cVec,:) = repmat(gaborBounds,[numFilters-1,1]);
 Bounds(nonLinVec,:) = nonLinBounds;
 Bounds(precisionVec,:) = precisionBounds;
-Bounds(sVec,:) = repmat([-Inf,0],[numFilters-1,1]);
+Bounds(sVec,:) = repmat([-Inf,Inf],[numFilters-1,1]);
 
 clear nonLinBounds gaborBounds historyMoveBaseBounds alphaBounds designBounds;
 
@@ -280,7 +282,7 @@ end
 variances(nonLinVec) = ones(nonLinParams,1);
 variances(precisionVec) = 10.*ones(precisionParams,1);
 % variances(sVec) = (sPrior(1)*sPrior(2))/((sPrior(1)+sPrior(2))^2*(sPrior(1)+sPrior(2)+1));
-variances(sVec) = var(log(betarnd(sPrior(1),sPrior(2),[1000,1]))).*ones(sParams,1)/10;
+variances(sVec) = var(-10.*log(1./betarnd(sPrior(1),sPrior(2),[1000,1])-1)).*ones(sParams,1);
 
 numIter = 16e5;burnIn = 1e5;skipRate = 1000;
 fullImSize = DIM(1)*DIM(2);optimalAccept = 0.234;
@@ -320,7 +322,7 @@ for zz=1:totalUnits
         end
         updateMu(nonLinVec) = [normrnd(0,1);gamrnd(4,1/4);gamrnd(8,1/4)];
         updateMu(precisionVec) = log(gamrnd(1,1,[precisionParams,1]));
-        updateMu(sVec) = normrnd(-2,0.5,[sParams,1]);
+        updateMu(sVec) = normrnd(0,30,[sParams,1]);
         
         updateMu = min(max(updateMu,Bounds(:,1)),Bounds(:,2));
         
@@ -349,7 +351,7 @@ for zz=1:totalUnits
             parameterVec(nonLinVec,ii) = [normrnd(0,1);gamrnd(4,1/4);gamrnd(8,1/4)];
             parameterVec(precisionVec,ii) = log(gamrnd(1,1,[precisionParams,1]));
 %             parameterVec(sVec,ii) = log(betarnd(sPrior(1),sPrior(2),[sParams,1]));
-            parameterVec(sVec,ii) = normrnd(-2,0.5,[sParams,1]);
+            parameterVec(sVec,ii) = normrnd(0,30,[sParams,1]);
             
             parameterVec(:,ii) = min(max(parameterVec(:,ii),Bounds(:,1)),Bounds(:,2));
 
@@ -371,8 +373,8 @@ for zz=1:totalUnits
                 count = count+gaborParams;
             end
             nonLins = parameterVec(nonLinVec,ii);
-            
-            S = diag(2.*binornd(1,exp(parameterVec(sVec,ii)))-1);
+            sVals = 1./(1+exp(-0.1.*parameterVec(sVec,ii)));
+            S = diag(2.*binornd(1,sVals)-1);
 
             x = ones(numStimuli,1);
             for jj=1:numStimuli
@@ -399,7 +401,7 @@ for zz=1:totalUnits
                 (parameterVec(nonLinVec(3),ii).*(-1/nonLinPrior(3,1))-log(nonLinPrior(3,1))).*phi2+...
                 log(phi2)*phi2+(phi2-1).*log(parameterVec(nonLinVec(3),ii))-log(gamma(phi2))+...
                 sum((precisionPrior(1)-1).*parameterVec(precisionVec,ii)-exp(parameterVec(precisionVec,ii)).*precisionPrior(2))+...
-                sum((sPrior(1)-1).*parameterVec(sVec,ii)+(sPrior(2)-1).*log(1-exp(parameterVec(sVec,ii))));
+                sum((sPrior(1)-1).*log(sVals)+(sPrior(2)-1).*log(1-sVals));
             
             count = designVec(end);
             for jj=1:numFilters
@@ -443,7 +445,8 @@ for zz=1:totalUnits
                         count = count+gaborParams;
                     end
                     nonLins = pStar(nonLinVec);
-                    S = diag(2.*binornd(1,exp(pStar(sVec)))-1);
+                    sVals = 1./(1+exp(-0.1.*pStar(sVec)));
+                    S = diag(2.*binornd(1,sVals)-1);
                     x = ones(numStimuli,1);
                     for jj=1:numStimuli
                         onScreenStim = unbiasedS(jj,:)';
@@ -469,7 +472,7 @@ for zz=1:totalUnits
                         (pStar(nonLinVec(3)).*(-1/nonLinPrior(3,1))-log(nonLinPrior(3,1))).*phi2+...
                         log(phi2)*phi2+(phi2-1).*log(pStar(nonLinVec(3)))-log(gamma(phi2))+...
                         sum((precisionPrior(1)-1).*pStar(precisionVec)-exp(pStar(precisionVec)).*precisionPrior(2))+...
-                        sum((sPrior(1)-1).*pStar(sVec)+(sPrior(2)-1).*log(1-exp(pStar(sVec))));
+                        sum((sPrior(1)-1).*log(sVals)+(sPrior(2)-1).*log(1-sVals));
                     
                     count = designVec(end);
                     for jj=1:numFilters
@@ -504,7 +507,7 @@ for zz=1:totalUnits
                     
                 else
                     display('miss');
-                    display(find(pStar>=Bounds(:,2)))
+                    display(find(pStar<=Bounds(:,1)))
                     loglambda = loglambda+updateParam.*(-optimalAccept);
                 end
                 scatter(kk,posteriorProb(ii));hold on;pause(0.01);
