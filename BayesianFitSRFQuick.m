@@ -90,7 +90,7 @@ allts = temp;
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-if length(strobeData) ~= numStimuli && unique(svStrobed) == 0
+if length(strobeData) ~= numStimuli && length(unique(svStrobed)) == 1
     strobeData = strobeData(1:2:end);
 elseif length(unique(svStrobed)) == 3
     strobeData = strobeData(svStrobed==1);
@@ -297,7 +297,7 @@ variances(precisionVec) = 10.*ones(precisionParams,1);
 variances(sVec) = var(-10.*log(1./betarnd(sPrior(1),sPrior(2),[1000,1])-1)).*ones(sParams,1);
 % variances(timeVec) = var(log(normrnd(50,10,[1000,2])))';
 
-numIter = 16e5;burnIn = 1e5;skipRate = 1000;
+numIter = 17e5;burnIn = 2e5;skipRate = 1000;
 fullImSize = DIM(1)*DIM(2);optimalAccept = 0.234;
 
 pi2 = pi/2;
@@ -308,7 +308,7 @@ if getenv('ENVIRONMENT')
    myCluster.JobStorageLocation = getenv('TMPDIR'); 
 end
 
-parpool(myCluster,8);
+parpool(myCluster,4);
 
 PosteriorSamples = zeros(totalUnits,numParameters,length(burnIn+1:skipRate:numIter));
 % PosteriorMean = zeros(totalUnits,numParameters);
@@ -570,7 +570,7 @@ parfor zz=1:totalUnits
         
             end
         end
-        indeces = find(posteriorProb~=Inf && posteriorProb ~= -Inf);
+        indeces = find(posteriorProb~=Inf & posteriorProb ~= -Inf);
         parameterVec = parameterVec(:,indeces);
         posteriorProb = posteriorProb(indeces);
         [maxPost,ind] = max(posteriorProb);
@@ -583,7 +583,7 @@ parfor zz=1:totalUnits
         
         pcaW = normrnd(0,1,numParameters);
         pcaW = normc(pcaW);
-        updateParam = 1e-2;
+        updateParam = logspace(-0.3,-2,burnIn);
         for iter=1:burnIn
                 
                 index = unidrnd(numParameters);
@@ -669,10 +669,10 @@ parfor zz=1:totalUnits
                         posteriorProb = loglikelihood+logprior;
                     end
                     
-                    if mod(iter,200) == 0
+                    if mod(iter,200) == 0 || iter < 5000
                         meanSubtract = parameterVec-updateMu;
-                        updateMu = updateMu+updateParam.*meanSubtract;
-                        halfSigma = halfSigma+updateParam.*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
+                        updateMu = updateMu+updateParam(iter).*meanSubtract;
+                        halfSigma = halfSigma+updateParam(iter).*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
                             meanSubtract')*((inv(halfSigma))')-identity)-halfSigma);
                         sigma = halfSigma'*halfSigma;
                         
@@ -680,11 +680,11 @@ parfor zz=1:totalUnits
                         pcaW = sigma*Z'*inv(triu(Z*sigma*Z'));
                         pcaW = normc(pcaW);
                         eigenvals = diag(pcaW'*sigma*pcaW);
+                        lambda = lambda+updateParam(iter).*(exp(min(0,logA))-optimalAccept);
                     end
-                    lambda = lambda+updateParam.*(exp(min(0,logA))-optimalAccept);
                     
                 else
-                    lambda = lambda+updateParam.*(-optimalAccept);
+                    lambda = lambda+updateParam(iter).*(-optimalAccept);
                 end
                 loglambda(index) = lambda;
         
