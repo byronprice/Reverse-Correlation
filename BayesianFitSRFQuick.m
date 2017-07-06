@@ -157,7 +157,7 @@ end
 clear pointProcessSpikes flipInterval;
 
 % INITIALIZE NUMBER OF PARAMETERS
-numFilters = 21;
+numFilters = 6; % 11 filters is 0.3 seconds/iteration, 6 is 0.14
 gaborRepeatParams = 5;
 gaborConstantParams = 4;
 gaborParams = gaborRepeatParams+gaborConstantParams;
@@ -302,18 +302,18 @@ fullImSize = DIM(1)*DIM(2);optimalAccept = 0.234;
 
 pi2 = pi/2;
 
-myCluster = parcluster('local');
-
-if getenv('ENVIRONMENT')
-   myCluster.JobStorageLocation = getenv('TMPDIR'); 
-end
-
-parpool(myCluster,4);
+% myCluster = parcluster('local');
+% 
+% if getenv('ENVIRONMENT')
+%    myCluster.JobStorageLocation = getenv('TMPDIR'); 
+% end
+% 
+% parpool(myCluster,4);
 
 PosteriorSamples = zeros(totalUnits,numParameters,length(burnIn+1:skipRate:numIter));
 % PosteriorMean = zeros(totalUnits,numParameters);
 % PosteriorInterval = zeros(totalUnits,numParameters,2);
-parfor zz=1:totalUnits
+for zz=1:totalUnits
         % ORGANIZE DATA
         spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
         numStimuli = size(spikeTrain,1);
@@ -383,36 +383,40 @@ parfor zz=1:totalUnits
 %             parameterVec(timeVec,ii) = [log(normrnd(50,10));log(normrnd(200,10))];
             
             parameterVec(:,ii) = min(max(parameterVec(:,ii),Bounds(:,1)),Bounds(:,2));
-
             
             % CALCULATE POSTERIOR
             W = zeros(fullImSize,numFilters-1);
             params = [parameterVec(bVec(1:2),ii);parameterVec(constantVec,ii);parameterVec(bVec(3:end),ii)];
             params(5:7) = exp(params(5:7));
-            temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+            temp1 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                 ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                 .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-            b = temp(:);
+            b = temp1(:);
             count = 1;
             for jj=1:numFilters-1
                 params = [parameterVec(cVec(count:count+1),ii);parameterVec(constantVec,ii);parameterVec(cVec(count+2:count+4),ii)];
                 params(5:7) = exp(params(5:7));
-                temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                temp2 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                     ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                     .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-                W(:,jj) = temp(:);
+                W(:,jj) = temp2(:);
                 count = count+gaborRepeatParams;
             end
             nonLins = parameterVec(nonLinVec,ii);nonLins(2:3) = exp(nonLins(2:3));
             sVals = 1./(1+exp(-0.1.*parameterVec(sVec,ii)));
-            S = diag(2.*binornd(1,sVals)-1);
+            S = repmat((2.*binornd(1,sVals)-1)',[numStimuli,1]);
 
-            x = ones(numStimuli,1);
-            for jj=1:numStimuli
-                onScreenStim = unbiasedS(jj,:)';
-                temp = 0.5*onScreenStim'*W*S*W'*onScreenStim+b'*onScreenStim;
-                x(jj) = nonLins(3)/(1+exp(-(temp-nonLins(1))*nonLins(2)));
-            end
+%             x = ones(numStimuli,1);
+%             for jj=1:numStimuli
+%                 onScreenStim = unbiasedS(jj,:)';
+%                 x(jj) = 0.5*(onScreenStim'*W)*S*(W'*onScreenStim);%+b'*onScreenStim;
+% %                 x(jj) = nonLins(3)/(1+exp(-(temp-nonLins(1))*nonLins(2)));
+%             end
+            temp3 = unbiasedS*W;
+            x = 0.5.*sum((temp3.*S).*temp3,2)+(b'*unbiasedS')';
+            x = nonLins(3)./(1+exp(-(x-nonLins(1)).*nonLins(2)));
+
+           % x = 0.5.*diag(unbiasedS*W*S*W'*unbiasedS')+(b'*unbiasedS')';
             mu = exp(designMatrix*parameterVec(designVec,ii)).*x;
 %             windowTimes = ceil(exp(parameterVec(timeVec,ii)));
 %             loglikelihood = sum(sum(spikeTrain(:,windowTimes(1):windowTimes(2)),2).*log(mu)-mu);
@@ -455,7 +459,6 @@ parfor zz=1:totalUnits
                     gaborPrior(9,2).*cos(parameterVec(count+5,ii));
                 count = count+gaborRepeatParams;
             end
-            
 
             posteriorProb(ii) = loglikelihood+logprior;
             % END CALCULATE POSTERIOR
@@ -470,32 +473,39 @@ parfor zz=1:totalUnits
 
                 if sum(pStar<=Bounds(:,1)) == 0 && sum(pStar>=Bounds(:,2)) == 0
                     % calculate posterior
-                    W = zeros(fullImSize,numFilters-1);
+                    tic;
                     params = [pStar(bVec(1:2));pStar(constantVec);pStar(bVec(3:end))];
                     params(5:7) = exp(params(5:7));
-                    temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                    temp1 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                         ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                         .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-                    b = temp(:);
+                    b = temp1(:);
+                  
                     count = 1;
                     for jj=1:numFilters-1
                         params = [pStar(cVec(count:count+1));pStar(constantVec);pStar(cVec(count+2:count+4))];
                         params(5:7) = exp(params(5:7));
-                        temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                        temp2 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                             ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                             .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-                        W(:,jj) = temp(:);
+                        W(:,jj) = temp2(:);
                         count = count+gaborRepeatParams;
                     end
+                    
                     nonLins = pStar(nonLinVec);nonLins(2:3) = exp(nonLins(2:3));
                     sVals = 1./(1+exp(-0.1.*pStar(sVec)));
-                    S = diag(2.*binornd(1,sVals)-1);
-                    x = ones(numStimuli,1);
-                    for jj=1:numStimuli
-                        onScreenStim = unbiasedS(jj,:)';
-                        temp = 0.5*onScreenStim'*W*S*W'*onScreenStim+b'*onScreenStim;
-                        x(jj) = nonLins(3)/(1+exp(-(temp-nonLins(1))*nonLins(2)));
-                    end
+                    S = repmat((2.*binornd(1,sVals)-1)',[numStimuli,1]);
+                    
+                    %             x = ones(numStimuli,1);
+                    %             for jj=1:numStimuli
+                    %                 onScreenStim = unbiasedS(jj,:)';
+                    %                 x(jj) = 0.5*(onScreenStim'*W)*S*(W'*onScreenStim);%+b'*onScreenStim;
+                    % %                 x(jj) = nonLins(3)/(1+exp(-(temp-nonLins(1))*nonLins(2)));
+                    %             end
+                    temp3 = unbiasedS*W;
+                    x = 0.5.*sum((temp3.*S).*temp3,2)+(b'*unbiasedS')';
+                    x = nonLins(3)./(1+exp(-(x-nonLins(1)).*nonLins(2)));
+                    
                     mu = exp(designMatrix*pStar(designVec)).*x;
 %                     windowTimes = ceil(exp(pStar(timeVec)));
 %                     loglikelihood = sum(sum(spikeTrain(:,windowTimes(1):windowTimes(2)),2).*log(mu)-mu);
@@ -538,14 +548,13 @@ parfor zz=1:totalUnits
                             gaborPrior(9,2).*cos(pStar(count+5));
                         count = count+gaborRepeatParams;
                     end
-                    
                     logA = (loglikelihood+logprior)-posteriorProb(ii);
         
                     if log(rand) < logA
                         parameterVec(:,ii) = pStar;
                         posteriorProb(ii) = loglikelihood+logprior;
                     end
-                    
+                    toc;
 %                     if mod(kk,100) == 0
 %                         meanSubtract = parameterVec(:,ii)-updateMu;
 %                         updateMu = updateMu+updateParam.*meanSubtract;
@@ -579,7 +588,7 @@ parfor zz=1:totalUnits
         
         temp = exp(loglambda).*eigenvals;
         loglambda = log(2.38*2.38).*ones(numParameters,1);
-        eigenvals = temp./exp(loglambda);
+        eigenvals = temp./exp(loglambda);clear temp;
         
         pcaW = normrnd(0,1,numParameters);
         pcaW = normc(pcaW);
@@ -593,32 +602,30 @@ parfor zz=1:totalUnits
 
                 if sum(pStar<=Bounds(:,1)) == 0 && sum(pStar>=Bounds(:,2)) == 0
                     % calculate posterior
-                    W = zeros(fullImSize,numFilters-1);
+                    
                     params = [pStar(bVec(1:2));pStar(constantVec);pStar(bVec(3:end))];
                     params(5:7) = exp(params(5:7));
-                    temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                    temp1 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                         ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                         .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-                    b = temp(:);
+                    b = temp1(:);
                     count = 1;
                     for jj=1:numFilters-1
                         params = [pStar(cVec(count:count+1));pStar(constantVec);pStar(cVec(count+2:count+4))];
                         params(5:7) = exp(params(5:7));
-                        temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                        temp2 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                             ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                             .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-                        W(:,jj) = temp(:);
+                        W(:,jj) = temp2(:);
                         count = count+gaborRepeatParams;
                     end
                     nonLins = pStar(nonLinVec);nonLins(2:3) = exp(nonLins(2:3));
                     sVals = 1./(1+exp(-0.1.*pStar(sVec)));
-                    S = diag(2.*binornd(1,sVals)-1);
-                    x = ones(numStimuli,1);
-                    for jj=1:numStimuli
-                        onScreenStim = unbiasedS(jj,:)';
-                        temp = 0.5*onScreenStim'*W*S*W'*onScreenStim+b'*onScreenStim;
-                        x(jj) = nonLins(3)/(1+exp(-(temp-nonLins(1))*nonLins(2)));
-                    end
+                    S = repmat((2.*binornd(1,sVals)-1)',[numStimuli,1]);
+                    
+                    temp3 = unbiasedS*W;
+                    x = 0.5.*sum((temp3.*S).*temp3,2)+(b'*unbiasedS')';
+                    x = nonLins(3)./(1+exp(-(x-nonLins(1)).*nonLins(2)));
                     mu = exp(designMatrix*pStar(designVec)).*x;
 %                     windowTimes = ceil(exp(pStar(timeVec)));
 %                     loglikelihood = sum(sum(spikeTrain(:,windowTimes(1):windowTimes(2)),2).*log(mu)-mu);
@@ -699,7 +706,7 @@ parfor zz=1:totalUnits
         end
         
         eigenvals = tempEigs;
-        pcaW = tempW;
+        pcaW = tempW;clear tempEigs tempW;
         effectiveParams = length(eigenvals);
         
         currentParams = parameterVec;currentProb = posteriorProb;
@@ -720,29 +727,27 @@ parfor zz=1:totalUnits
                     W = zeros(fullImSize,numFilters-1);
                     params = [pStar(bVec(1:2));pStar(constantVec);pStar(bVec(3:end))];
                     params(5:7) = exp(params(5:7));
-                    temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                    temp1 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                         ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                         .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-                    b = temp(:);
+                    b = temp1(:);
                     count = 1;
                     for jj=1:numFilters-1
                         params = [pStar(cVec(count:count+1));pStar(constantVec);pStar(cVec(count+2:count+4))];
                         params(5:7) = exp(params(5:7));
-                        temp = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
+                        temp2 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
                             ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
                             .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
-                        W(:,jj) = temp(:);
+                        W(:,jj) = temp2(:);
                         count = count+gaborRepeatParams;
                     end
                     nonLins = pStar(nonLinVec);nonLins(2:3) = exp(nonLins(2:3));
                     sVals = 1./(1+exp(-0.1.*pStar(sVec)));
-                    S = diag(2.*binornd(1,sVals)-1);
-                    x = ones(numStimuli,1);
-                    for jj=1:numStimuli
-                        onScreenStim = unbiasedS(jj,:)';
-                        temp = 0.5*onScreenStim'*W*S*W'*onScreenStim+b'*onScreenStim;
-                        x(jj) = nonLins(3)/(1+exp(-(temp-nonLins(1))*nonLins(2)));
-                    end
+                    S = repmat((2.*binornd(1,sVals)-1)',[numStimuli,1]);
+                    
+                    temp3 = unbiasedS*W;
+                    x = 0.5.*sum((temp3.*S).*temp3,2)+(b'*unbiasedS')';
+                    x = nonLins(3)./(1+exp(-(x-nonLins(1)).*nonLins(2)));
                     mu = exp(designMatrix*pStar(designVec)).*x;
 %                     windowTimes = ceil(exp(pStar(timeVec)));
 %                     loglikelihood = sum(sum(spikeTrain(:,windowTimes(1):windowTimes(2)),2).*log(mu)-mu);
@@ -824,7 +829,7 @@ parfor zz=1:totalUnits
 %            subplot(numRows,numColumns,ii);histogram(PosteriorSamples(zz,:,:));
 %        end
 end
-delete(gcp);
+% delete(gcp);
 fileName = strcat(EphysFileName(1:end-9),'-Results.mat');
 save(fileName,'PosteriorSamples','unbiasedS','reducedSpikeCount','totalUnits','allts','stimTimes','xaxis','yaxis');
 end
