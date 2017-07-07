@@ -252,7 +252,7 @@ clear nonLinBounds gaborBounds historyMoveBaseBounds designBounds timeBounds ...
 spatFreqPrior = [2.6667,0.03]; % gamma, see Stryker 2008 J Neuro, Fig. 6A
 temp = max(gamrnd(spatFreqPrior(1),spatFreqPrior(2),[5000,1]),1/150);
 temp = (1./(tan(((1./temp)./2).*pi./180).*(2*DistToScreen*10)))*conv_factor;
-cppPrior = mle(temp,'distribution','gamma');
+cppPrior = mle(temp,'distribution','gamma');clear temp;
 
 gaborPrior = zeros(gaborParams,2);
 
@@ -327,7 +327,7 @@ for zz=1:totalUnits
         designPrior(designVec,:) = [b(1),0];
         
         %MCMC intialization
-        numStarts = 1000;
+        numStarts = 500;
         parameterVec = zeros(numParameters,numStarts);
         posteriorProb = zeros(numStarts,1);
         
@@ -443,7 +443,7 @@ for zz=1:totalUnits
 %                 (timePrior(2,1)-1).*parameterVec(timeVec(2),ii)-exp(parameterVec(timeVec(2),ii))./timePrior(2,2);
 
             count = designVec(end);
-            logprior = logprior+0.5*log(gaborPrior(1,2))-...
+            logprior = logprior-0.5*log(gaborPrior(1,2))-...
                     (parameterVec(count+1,ii))*(parameterVec(count+1,ii))./...
                     (2*gaborPrior(1,2))-...
                     0.5*log(gaborPrior(2,2))-...
@@ -453,7 +453,7 @@ for zz=1:totalUnits
                     (gaborPrior(4,1)-1).*parameterVec(count+4,ii)-exp(parameterVec(count+4,ii))./gaborPrior(4,2);
             count = count+4;
             for jj=1:numFilters
-                logprior = logprior+gaborPrior(6,2).*cos(parameterVec(count+2,ii))-...
+                logprior = logprior+gaborPrior(6,2).*cos(parameterVec(count+2,ii))+...
                     (gaborPrior(7,1)-1).*parameterVec(count+3,ii)-exp(parameterVec(count+3,ii))./gaborPrior(7,2)+...
                     gaborPrior(8,2).*cos(parameterVec(count+4,ii))+...
                     gaborPrior(9,2).*cos(parameterVec(count+5,ii));
@@ -464,20 +464,21 @@ for zz=1:totalUnits
             % END CALCULATE POSTERIOR
             loglambda = log(2.38*2.38).*ones(numParameters,1);
             eigenvals = variances;
-            for kk=1:250
+            for kk=1:500
                 
-                index = unidrnd(numParameters);
+                index = unidrnd(numParameters);%unidrnd(numParameters);
                 lambda = loglambda(index);
                 stdev = sqrt(exp(lambda).*eigenvals(index));
                 pStar = parameterVec(:,ii)+pcaW(:,index)*normrnd(0,stdev);
 
                 if sum(pStar<=Bounds(:,1)) == 0 && sum(pStar>=Bounds(:,2)) == 0
                     % calculate posterior
-                    tic;
                     params = [pStar(bVec(1:2));pStar(constantVec);pStar(bVec(3:end))];
                     params(5:7) = exp(params(5:7));
-                    temp1 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
-                        ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
+                    temp1 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2)))...
+                        .*((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2)))./(2*params(5)*params(5))-...
+                        ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2)))...
+                        .*((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2)))./(2*params(6)*params(6)))...
                         .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
                     b = temp1(:);
                   
@@ -485,8 +486,10 @@ for zz=1:totalUnits
                     for jj=1:numFilters-1
                         params = [pStar(cVec(count:count+1));pStar(constantVec);pStar(cVec(count+2:count+4))];
                         params(5:7) = exp(params(5:7));
-                        temp2 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2))).^2./(2*params(5)*params(5))-...
-                            ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2))).^2/(2*params(6)*params(6)))...
+                        temp2 = params(1).*exp(-((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2)))...
+                            .*((X-params(3)).*cos(params(2))-(Y-params(4)).*sin(params(2)))./(2*params(5)*params(5))-...
+                            ((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2)))...
+                            .*((X-params(3)).*sin(params(2))+(Y-params(4)).*cos(params(2)))./(2*params(6)*params(6)))...
                             .*sin((2*pi.*params(7)).*(cos(params(8)-pi2).*(X-params(3))-sin(params(8)-pi2).*(Y-params(4)))-params(9));
                         W(:,jj) = temp2(:);
                         count = count+gaborRepeatParams;
@@ -532,7 +535,7 @@ for zz=1:totalUnits
 %                         (timePrior(2,1)-1).*pStar(timeVec(2))-exp(pStar(timeVec(2)))./timePrior(2,2);
                     
                     count = designVec(end);
-                    logprior = logprior+0.5*log(gaborPrior(1,2))-...
+                    logprior = logprior-0.5*log(gaborPrior(1,2))-...
                             (pStar(count+1))*(pStar(count+1))./...
                             (2*gaborPrior(1,2))-...
                             0.5*log(gaborPrior(2,2))-...
@@ -542,7 +545,7 @@ for zz=1:totalUnits
                             (gaborPrior(4,1)-1).*pStar(count+4)-exp(pStar(count+4))./gaborPrior(4,2);
                     count = count+4;
                     for jj=1:numFilters
-                        logprior = logprior+gaborPrior(6,2).*cos(pStar(count+2))-...
+                        logprior = logprior+gaborPrior(6,2).*cos(pStar(count+2))+...
                             (gaborPrior(7,1)-1).*pStar(count+3)-exp(pStar(count+3))./gaborPrior(7,2)+...
                             gaborPrior(8,2).*cos(pStar(count+4))+...
                             gaborPrior(9,2).*cos(pStar(count+5));
@@ -550,11 +553,11 @@ for zz=1:totalUnits
                     end
                     logA = (loglikelihood+logprior)-posteriorProb(ii);
         
-                    if log(rand) < logA
+                    if log(rand) < logA && logA < Inf
                         parameterVec(:,ii) = pStar;
                         posteriorProb(ii) = loglikelihood+logprior;
                     end
-                    toc;
+                 
 %                     if mod(kk,100) == 0
 %                         meanSubtract = parameterVec(:,ii)-updateMu;
 %                         updateMu = updateMu+updateParam.*meanSubtract;
@@ -572,9 +575,10 @@ for zz=1:totalUnits
                 else
                     lambda = lambda+updateParam.*(-optimalAccept);
                 end
-%                 scatter(kk,posteriorProb(ii));hold on;title(sprintf('Window: %d - %d',ceil(exp(parameterVec(timeVec(1),ii))),...
-%                     ceil(exp(parameterVec(timeVec(2),ii)))));
-%                 pause(0.01);
+%                 scatter(kk,posteriorProb(ii));%hold on;title(sprintf('Window: %d - %d',ceil(exp(parameterVec(timeVec(1),ii))),...
+%                    % ceil(exp(parameterVec(timeVec(2),ii)))));
+%                 axis([0 500 -2000 0]);
+%                 pause(0.01);hold on;
                 loglambda(index) = lambda;
         
             end
@@ -652,7 +656,7 @@ for zz=1:totalUnits
 %                         (timePrior(2,1)-1).*pStar(timeVec(2))-exp(pStar(timeVec(2)))./timePrior(2,2);
                     
                     count = designVec(end);
-                    logprior = logprior+0.5*log(gaborPrior(1,2))-...
+                    logprior = logprior-0.5*log(gaborPrior(1,2))-...
                             (pStar(count+1))*(pStar(count+1))./...
                             (2*gaborPrior(1,2))-...
                             0.5*log(gaborPrior(2,2))-...
@@ -662,7 +666,7 @@ for zz=1:totalUnits
                             (gaborPrior(4,1)-1).*pStar(count+4)-exp(pStar(count+4))./gaborPrior(4,2);
                     count = count+4;
                     for jj=1:numFilters
-                        logprior = logprior+gaborPrior(6,2).*cos(pStar(count+2))-...
+                        logprior = logprior+gaborPrior(6,2).*cos(pStar(count+2))+...
                             (gaborPrior(7,1)-1).*pStar(count+3)-exp(pStar(count+3))./gaborPrior(7,2)+...
                             gaborPrior(8,2).*cos(pStar(count+4))+...
                             gaborPrior(9,2).*cos(pStar(count+5));
@@ -671,7 +675,7 @@ for zz=1:totalUnits
                     
                     logA = (loglikelihood+logprior)-posteriorProb;
         
-                    if log(rand) < logA
+                    if log(rand) < logA && logA < Inf
                         parameterVec = pStar;
                         posteriorProb = loglikelihood+logprior;
                     end
@@ -774,7 +778,7 @@ for zz=1:totalUnits
 %                         (timePrior(2,1)-1).*pStar(timeVec(2))-exp(pStar(timeVec(2)))./timePrior(2,2);
                     
                     count = designVec(end);
-                    logprior = logprior+0.5*log(gaborPrior(1,2))-...
+                    logprior = logprior-0.5*log(gaborPrior(1,2))-...
                             (pStar(count+1))*(pStar(count+1))./...
                             (2*gaborPrior(1,2))-...
                             0.5*log(gaborPrior(2,2))-...
@@ -784,7 +788,7 @@ for zz=1:totalUnits
                             (gaborPrior(4,1)-1).*pStar(count+4)-exp(pStar(count+4))./gaborPrior(4,2);
                     count = count+4;
                     for jj=1:numFilters
-                        logprior = logprior+gaborPrior(6,2).*cos(pStar(count+2))-...
+                        logprior = logprior+gaborPrior(6,2).*cos(pStar(count+2))+...
                             (gaborPrior(7,1)-1).*pStar(count+3)-exp(pStar(count+3))./gaborPrior(7,2)+...
                             gaborPrior(8,2).*cos(pStar(count+4))+...
                             gaborPrior(9,2).*cos(pStar(count+5));
@@ -793,7 +797,7 @@ for zz=1:totalUnits
                     
                     logA = (loglikelihood+logprior)-currentProb;
         
-                    if log(rand) < logA
+                    if log(rand) < logA && logA < Inf
                         currentParams = pStar;
                         currentProb = loglikelihood+logprior;
                     end
@@ -822,12 +826,12 @@ for zz=1:totalUnits
         PosteriorSamples(zz,:,:) = parameterVec;
         
         
-%         numColumns = 4;
-%         numRows = floor(numParameters/numColumns)+mod(numParameters,numColumns);
-%        figure();
-%        for ii=1:numParameters
-%            subplot(numRows,numColumns,ii);histogram(PosteriorSamples(zz,:,:));
-%        end
+        numColumns = 4;
+        numRows = floor(numParameters/numColumns)+mod(numParameters,numColumns);
+        figure();
+        for ii=1:numParameters
+            subplot(numRows,numColumns,ii);histogram(PosteriorSamples(zz,:,:));
+        end
 end
 % delete(gcp);
 fileName = strcat(EphysFileName(1:end-9),'-Results.mat');
