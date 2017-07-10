@@ -47,7 +47,7 @@ load('NoiseVars.mat');
 
 switch nargin
     case 1
-        NoiseType = 'pink';
+        NoiseType = 'pinkHC';
 end
 % Acquire a handle to OpenGL, so we can use OpenGL commands in our code:
 global GL;
@@ -120,6 +120,8 @@ for ii=1:numStimuli
     S(ii,:) = Y-difference;
 end
 S = uint8(S);
+Sdisplay = S;
+Sdisplay(S<50) = 0;Sdisplay(S>=50 & S<206) = 127;Sdisplay(S>=206) = 255;
 
 wLow = round((w_pixels-maxPix)/2);
 wHigh = round(w_pixels-wLow);
@@ -177,7 +179,8 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix');
+    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix',...
+    'Sdisplay');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)

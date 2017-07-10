@@ -84,7 +84,7 @@ vbl = Screen('Flip',win);
 for ii=1:numMoviesToDisplay
     index = movieNums(ii);
     load(sprintf('10Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
-%     S(S<85) = 0;S(S>=85 & S<169) = 127;S(S>=169) = 255;
+    S(S<50) = 0;S(S>=50 & S<206) = 127;S(S>=206) = 255;
     tt = 1;
     waitTime = 10+normrnd(0,1);
     vbl = Screen('Flip', win,vbl+waitTime);
@@ -116,7 +116,7 @@ movieType = '10Sec_PinkNoise';
 
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
-filename = sprintf('NoiseMovieStim%s%d_%d.mat','pink',Date,AnimalName);
+filename = sprintf('NoiseMovieStim%s%d_%d.mat','pinkHC',Date,AnimalName);
 save(filename,'numMoviesToDisplay','movie_FrameRate','movieTime_Seconds',...
     'DistToScreen','screenPix_to_effPix','minPix','maxPix',...
     'conv_factor','movieNums','destRect','movieType');
