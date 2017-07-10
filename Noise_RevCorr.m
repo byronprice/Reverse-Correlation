@@ -121,7 +121,7 @@ for ii=1:numStimuli
 end
 S = uint8(S);
 Sdisplay = S;
-Sdisplay(S<50) = 0;Sdisplay(S>=50 & S<206) = 127;Sdisplay(S>=206) = 255;
+Sdisplay(S<60) = 0;Sdisplay(S>=60 & S<196) = 127;Sdisplay(S>=196) = 255;
 
 wLow = round((w_pixels-maxPix)/2);
 wHigh = round(w_pixels-wLow);
