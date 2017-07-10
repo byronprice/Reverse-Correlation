@@ -42,7 +42,7 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %    
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/04/05
+% Updated: 2017/07/10
 % By: Byron Price
 
 % CREATE GIANT CONVOLUTION MATRIX TO TAKE DISCRETE
@@ -77,282 +77,201 @@ if exist(EphysFileName,'file') ~= 2
 end
 
 StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
-load(EphysFileName,'allts','allad','adfreq','tsevs','svStrobed','nunits1');
-load(StimulusFileName,'numStimuli','minPix','maxPix','conv_factor','screenPix_to_effPix','effectivePixels',...
-    'DistToScreen','beta','S');
+load(EphysFileName,'nunits1','allts','adfreq','allad','svStrobed','tsevs')
+load(StimulusFileName)
 
-% generate theoretical stimulus power spectrum
-if length(effectivePixels) == 1
-    N = sqrt(effectivePixels);
-    DIM = [N,N];
-else
-   temp = effectivePixels;
-   effectivePixels(1) = temp(2);effectivePixels(2) = temp(1);
-   DIM = effectivePixels;
+% gaborFun = @(x,y,B,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
+%     B.*exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
+%     ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
+%     .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)-sin(theta-pi/2).*(y-yc))-phi);
+% 
+% %nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
+% nonLinFun = @(x,base,slope,rise) rise./(1+exp(-(x-base).*slope));
+%nonLinFun = @(x,slope,intercept) max(0,slope.*x+intercept);
+
+% horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
+% vertDegrees = atan((screenPix_to_effPix*DIM(2)*conv_factor/10)/DistToScreen);
+
+DIM = zeros(2,1);
+if size(effectivePixels,2) == 1
+    DIM(1) = sqrt(effectivePixels);
+    DIM(2) = sqrt(effectivePixels);
+elseif size(effectivePixels,2) == 2
+    DIM(1) = effectivePixels(2);
+    DIM(2) = effectivePixels(1);
 end
+    
+xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
+    round(screenPix_to_effPix*DIM(2)/2),DIM(2));
+yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
+    -round(screenPix_to_effPix*DIM(1)/4)+1,DIM(1));
+
+[X,Y] = meshgrid(xaxis,yaxis);
+
+% CREATE UNBIASED VERSION OF MOVIE BY DIVIDING OUT POWER SPECTRUM
+%  USED TO GENERATE THE MOVIE
 
 u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
-% Reproduce these frequencies along ever row
-U = repmat(u,1,DIM(2)); 
-% v is the set of frequencies along the second dimension.  For a square
-% region it will be the transpose of u
-v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]/DIM(2);
-% Reproduce these frequencies along ever column
-V = repmat(v,DIM(1),1);
+v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
+[V,U] = meshgrid(v,u);
+S_f = (U.^2+V.^2).^(beta/2);
 
-% [U,V] = meshgrid(u,v); U = U'; V = V';
-% Generate the power spectrum
-S_f = (U.^2 + V.^2).^(beta/2);
-
-% Set any infinities to zero
-S_f(S_f==inf) = 0;
-
-tempSf = S_f; tempSf(tempSf==0) = 1;
-
-% correct power spectrum of the images to remove bias in RF estimate
-%  I control the image generation so we know the theoretical power spectrum
-parfor ii=1:numStimuli
-    tempS = reshape(S(ii,:),[DIM(1),DIM(2)]);
-    tempFFT = fft2(double(tempS));
-    correctedIm = ifft2(tempFFT./tempSf);
-    S(ii,:) = real(correctedIm(:));
+S_f(S_f==inf) = 1;
+a = 0;b = 255;
+unbiasedS = zeros(size(S));
+for ii=1:numStimuli
+    temp = reshape(real(ifftn(fftn(double(reshape(S(ii,:),[DIM(1),DIM(2)])))./S_f)),[DIM(1)*DIM(2),1])';
+    currentMin = min(temp);currentMax = max(temp);
+    temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
+    unbiasedS(ii,:) = temp;
 end
 
+clear S S_f U V u v;
+
+% REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
-totalUnits = sum(sum(temp));
-
-% tsevs are the strobed times of stimulus onset, then offset
-%  Onset at tsevs{1,33}(2), offset at tsevs{1,33}(3), onset at
-%  tsevs{1,33}(4), offset at 5, etc.
+totalUnits = sum(sum(temp))-numChans;
 
 temp = cell(totalUnits,1);
 count = 1;
 for ii=1:numChans
-    for jj=1:nunits1
-        if isempty(allts{jj,Chans(ii)}) == 0
-            temp{count} = allts{jj,Chans(ii)};
-            count = count+1;
-        end
-    end
+   for jj=2:nunits1
+       if isempty(allts{jj,Chans(ii)}) == 0
+           temp{count} = allts{jj,Chans(ii)};
+           count = count+1;
+       end
+   end
 end
 allts = temp;
-
-% ASSUME THAT A RESPONSE TO A STIMULUS OFFSET IS THE SAME AS A RESPONSE TO
-%  THE NEGATIVE OF THAT IMAGE, image created with values from 0 to 255
-% Grey = 127;
-numStimuli = numStimuli*2;
-newS = zeros(numStimuli,size(S,2),'single');
-for ii=1:numStimuli
-    if mod(ii,2) == 1
-        newS(ii,:) = S(floor(ii/2)+1,:);
-    elseif mod(ii,2) == 0
-        newS(ii,:) = 255-S(ii/2,:);
-    end
-end
-%newS = newS-Grey;
-clear S;
-
-% newS = S;
 
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-stimLen = 0.07;
-
-nonEmptyAD = ~cellfun(@isempty,allad);
-LFP_Movement = allad{nonEmptyAD};
-
-if iscell(LFP_Movement)==1
-    totalTime = length(LFP_Movement{1})./adfreq;
-else
-    totalTime = length(LFP_Movement)./adfreq;
+if length(strobeData) ~= numStimuli && length(unique(svStrobed)) == 1
+    strobeData = strobeData(1:2:end);
+elseif length(unique(svStrobed)) == 3
+    strobeData = strobeData(svStrobed==1);
 end
+
+% GATHER LFP AND MOVEMENT DATA
+nonEmptyAD = ~cellfun(@isempty,allad);
+inds = find(nonEmptyAD==1);
+LFP = cell(length(inds),1);
+for ii=1:length(inds)
+   LFP{ii} = allad{inds};
+end
+
+totalTime = length(LFP{1})./adfreq;
+
+if isempty(allad{49}) == 0
+    movement = allad{49};
+
+    difference = length(LFP{1})-length(movement);
+    
+    if mod(difference,2) == 0
+        addOn = difference/2;
+        movement = [zeros(addOn-1,1);movement;zeros(addOn+1,1)];
+    else
+        addOn = floor(difference/2);
+        movement = [zeros(addOn,1);movement;zeros(addOn+1,1)];
+    end
+    tempMov = conv(abs(movement),ones(adfreq/2,1),'same');
+    tempMov = tempMov-mean(tempMov);
+    stdEst = 1.4826*mad(tempMov,1);
+    movement = single(tempMov>(3*stdEst));
+    clear tempMov stdEst;
+else
+    movement = zeros(length(LFP{1}),1);
+end
+
 % COLLECT DATA IN THE PRESENCE OF VISUAL STIMULI
-Response = zeros(totalUnits,numStimuli);
-baseRate = zeros(totalUnits,1);
+timeMultiplier = 1000;
+totalMillisecs = round(totalTime*timeMultiplier);
+
+stimTimes = round(strobeData.*timeMultiplier);
+
+if exist('flipIntervals','var')==1
+    flipInterval = mean(flipIntervals);
+end
+
+pointProcessSpikes = zeros(totalMillisecs,totalUnits);
+
 for ii=1:totalUnits
-    stimStart = 0.05;%stimStartTimes(ii,jj+1);
-    baseRate(ii) = length(allts{ii})./totalTime;
-    %             display(baseRate(ii,jj));
-    %         figure();plot(0,0);axis([0 totalTime -10 10]);hold on;
-    for kk=1:numStimuli
-        stimOnset = strobeData(kk);
-        high = find(allts{ii} > (stimOnset+stimStart));
-        low = find(allts{ii} < (stimOnset+stimStart+stimLen));
-        temp = intersect(low,high);
-        
-        Response(ii,kk) = length(temp)./stimLen;
-%         if mod(kk,2) == 1
-%             Response(ii,kk) = (length(temp)./stimLen)./baseRate(ii,jj+1);%-1
-%         elseif mod(kk,2) == 0
-%             Response(ii,kk) = -(length(temp)./stimLen)./baseRate(ii,jj+1); %+1
-%         end
-        
+   spikeTimes = max(1,round(allts{ii}.*timeMultiplier));
+   for jj=1:length(spikeTimes)
+      pointProcessSpikes(spikeTimes(jj),ii) = 1;
+   end
+end
+
+reducedMov = zeros(numStimuli,1*timeMultiplier);
+reducedSpikeCount = zeros(totalUnits,numStimuli,1*timeMultiplier);
+for ii=1:totalUnits
+    for jj=1:numStimuli
+        timeInds = stimTimes(jj):stimTimes(jj)+1*timeMultiplier-1;
+        reducedSpikeCount(ii,jj,:) = pointProcessSpikes(timeInds,ii)';
+        reducedMov(jj,:) = movement(timeInds);
     end
 end
 
-
-% REGULARIZED PSEUDO-INVERSE SOLUTION
-horzDegrees = atand((screenPix_to_effPix*DIM(2)*conv_factor/10)/DistToScreen);
-vertDegrees = atand((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
-xaxis = linspace(-horzDegrees/2,horzDegrees/2,DIM(2));
-yaxis = linspace(-vertDegrees/4,3*vertDegrees/4,DIM(1));
+clearvars -except EphysFileName totalUnits numStimuli ...
+    reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
+    X Y totalMillisecs reducedMov movement;
 
 fullSize = DIM(1)*DIM(2);
-numParams = fullSize+1+1+1;
+basisStdDevs = [100,150,200,250,300,400,500,1000];
+numStdDevs = length(basisStdDevs);
 
-Design = zeros(numStimuli,numParams-2);
-Design(:,1) = ones(numStimuli,1);
-Design(:,2:end) = newS;clear newS;
-logPoissonPDF = @(y,mu) y.*mu-exp(mu);
-logGammaPDF = @(x,a,b) -a*log(b)-log(gamma(a))+(a-1).*log(x)-x./b;
-
-for unit = 1:totalUnits
-    y = Response(unit,:)';
-    baseFiring = baseRate(unit);
-    numIter = 7e5;burnIn = 2e5;skipRate = 500;
-    params = zeros(numParams,(numIter-burnIn)/skipRate);
-    posteriorProb = zeros((numIter-burnIn)/skipRate,1);
-    prevParams = zeros(numParams,1);
-    
-    priorMu = log(baseFiring);
-    
-    alpha = 1;beta = 1;
-    abprior1=1e-3;abprior2=1e3;
-    
-    
-    prevPosterior = -Inf;
-    while prevPosterior < -1e10 || isnan(prevPosterior)==1
-        prevParams(1:end-2,1) = mvnrnd([priorMu;zeros(fullSize,1)],eye(numParams-2))';
-        prevParams(end-1,1) = log(alpha);
-        prevParams(end,1) = log(beta);
-        
-        
-        tempMu = Design*prevParams(1:end-2,1);
-        prevLogLikelihood = sum(logPoissonPDF(y,tempMu));
-        
-        smoothPrior = del2(reshape(prevParams(2:end-2,1),[DIM(1),DIM(2)]));
-        prevLogPrior = ((fullSize)/2)*log(alpha)-0.5*alpha*(prevParams(2:end-2,1)'*prevParams(2:end-2,1))+...
-            0.5*log(alpha)-0.5*alpha*(prevParams(1,1)-priorMu)^2+...
-            ((fullSize)/2)*log(beta)-0.5*beta*(smoothPrior(:)'*smoothPrior(:))+...
-            sum(logGammaPDF([alpha,beta],abprior1,abprior2));
-        
-        prevPosterior = prevLogLikelihood+prevLogPrior;
-    end
-    
-    
-%     FOR AUTOMATIC CREATION OF UPDATE MATRIX
-    updateParam = logspace(-0.3,-3,burnIn);
-    loglambda = log(2.38^2/numParams);
-    updateMu = zeros(numParams,1);
-    updateMu(1:end-2) = mvnrnd([priorMu;zeros(fullSize,1)],eye(numParams-2))';
-    updateMu(end-1) = log(1.5);updateMu(end) = log(1.5);
-    optimalAccept = 0.234;
-    
-    sigma = eye(numParams);halfSigma = cholcov(sigma);
-    identity = eye(numParams);
-    
-    proposalMu = zeros(numParams,1)';
-    for ii=2:burnIn
-        tic;
-        pStar = prevParams+mvnrnd(proposalMu,exp(loglambda).*sigma)';
-        
-        if sum(pStar(end-1:end)<=-30) == 0
-            tempMu = Design*pStar(1:end-2);
-            pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
-            smoothPrior = del2(reshape(pStar(2:end-2),[DIM(1),DIM(2)]));
-            
-            beta = exp(pStar(end));alpha = exp(pStar(end-1));
-            pStarLogPrior = ((fullSize)/2)*log(alpha)-0.5*alpha*(pStar(2:end-2)'*pStar(2:end-2))+...
-                0.5*log(alpha)-0.5*alpha*(pStar(1)-priorMu)^2+...
-                ((fullSize)/2)*log(beta)-0.5*beta*(smoothPrior(:)'*smoothPrior(:))+...
-                sum(logGammaPDF([alpha,beta],abprior1,abprior2));
-            logA = (pStarLogLikelihood+pStarLogPrior)-prevPosterior;
-
-            if log(rand) < logA
-                prevParams = pStar;
-                prevPosterior = pStarLogLikelihood+pStarLogPrior;
-            end
-            
-            meanSubtract = prevParams-updateMu;
-            updateMu = updateMu+updateParam(ii).*meanSubtract;
-            halfSigma = halfSigma+updateParam(ii).*(triu((halfSigma^-1)*(halfSigma'*halfSigma+meanSubtract*...
-                meanSubtract')*((halfSigma^-1)')-identity)-halfSigma);
-            sigma = halfSigma'*halfSigma;
-            
-            loglambda = loglambda+updateParam(ii).*(exp(min(0,logA))-optimalAccept);
-        else
-            loglambda = loglambda+updateParam(ii).*(-optimalAccept);
-        end
-        toc;
-    end
-    
-    [V,D] = eig(sigma);
-    W = V*sqrtm(D);
-    eigenvals = diag(W'*W);
-    
-    tempW = [];
-    tempEigs = [];
-    for jj=1:numParams
-        if eigenvals(jj) > 1e-6
-            tempW = [tempW,W(:,jj)];
-            tempEigs = [tempEigs,eigenvals(jj)];
-        end
-    end
-    
-    W = fliplr(tempW);
-    eigenvals = fliplr(tempEigs);
-    q = length(eigenvals);
-    p = ones(q,1)./q;
-    updateParam = 1e-2;
-    loglambda = ones(q,1).*loglambda;
-    params(:,1) = prevParams;
-    posteriorProb(1) = prevPosterior;
-    
-    count = 2;
-    for ii=burnIn+1:numIter
-        index = find(mnrnd(1,p)==1);
-        lambda = loglambda(index);
-        stdev = sqrt(exp(lambda).*eigenvals(index));
-        pStar = prevParams+W(:,index)*normrnd(0,stdev);
-        
-        if sum(pStar(end-1:end)<=-30) == 0
-            tempMu = Design*pStar(1:end-2);
-            pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
-            smoothPrior = del2(reshape(pStar(2:end-2),[DIM(1),DIM(2)]));
-            
-            beta = exp(pStar(end));alpha = exp(pStar(end-1));
-            pStarLogPrior = ((fullSize)/2)*log(alpha)-0.5*alpha*(pStar(2:end-2)'*pStar(2:end-2))+...
-                0.5*log(alpha)-0.5*alpha*(pStar(1)-priorMu)^2+...
-                ((fullSize)/2)*log(beta)-0.5*beta*(smoothPrior(:)'*smoothPrior(:))+...
-                sum(logGammaPDF([alpha,beta],abprior1,abprior2));
-            logA = (pStarLogLikelihood+pStarLogPrior)-prevPosterior;
-
-            if log(rand) < logA
-                prevParams = pStar;
-                prevPosterior = pStarLogLikelihood+pStarLogPrior;
-            end
-            
-            lambda = lambda+updateParam.*(exp(min(0,logA))-optimalAccept);
-        else
-            lambda = lambda+updateParam.*(-optimalAccept);
-        end
-        loglambda(index) = lambda;
-        if mod(count,skipRate) == 0
-            params(:,count) = prevParams;
-            posteriorProb(count) = prevPosterior;
-        end
-        count = count+1;
-    end
-    fileName = strcat('NoiseResults',NoiseType,num2str(Date),'_',num2str(AnimalName),num2str(unit),'.mat');
-    save(fileName,'Design','params','DIM','numParams');
-
+finalResultsPoisson = struct('b',cell(totalUnits,numStdDevs),...
+    'deviance',cell(totalUnits,numStdDevs),'stats',cell(totalUnits,numStdDevs));
+finalResultsNormal = struct('b',cell(totalUnits,numStdDevs),...
+    'deviance',cell(totalUnits,numStdDevs),'stats',cell(totalUnits,numStdDevs));
+for zz=1:totalUnits
+   spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
+   spikeTrain = sum(spikeTrain(:,50:500),2);
+   movDesign = sum(reducedMov(:,50:500),2);
+   
+   %    r = spikeTrain;
+   %    fhat = unbiasedS\r;
+   gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
+       ((y-yc).*(y-yc))./(2*std*std));
+   
+   center1 = xaxis(1:3:end);
+   center2 = yaxis(1:3:end);
+   numBasis1 = length(center1);
+   numBasis2 = length(center2);
+   totalParams = numBasis1*numBasis2;
+   
+   basisFuns = zeros(fullSize,totalParams);
+   for stddev = 1:numStdDevs
+       count = 1;
+       for ii=1:numBasis1
+           for jj=1:numBasis2
+               temp = gaussFun(X,Y,center1(ii),center2(jj),basisStdDevs(stddev));
+               basisFuns(:,count) = temp(:);
+               count = count+1;
+           end
+       end
+       design = [movDesign,unbiasedS*basisFuns];
+       [bPoiss,devPoiss,statsPoiss] = glmfit(design,spikeTrain,'poisson');
+       finalResultsPoisson.b{zz,stddev} = bPoiss;
+       finalResultsPoisson.deviance{zz,stddev} = devPoiss;
+       finalResultsPoisson.stats{zz,stddev} = statsPoiss;
+       
+       [b,dev,stats] = glmfit(design,spikeTrain);
+       finalResultsNormal.b{zz,stddev} = b;
+       finalResultsNormal.deviance{zz,stddev} = dev;
+       finalResultsNormal.stats{zz,stddev} = stats;
+       
+       clear bPoiss devPoiss statsPoiss b dev stats count design;
+   end
+   clear spikeTrain movDesign basisFuns center1 center2 numBasis1 numBasis2 totalParams;
 end
 
-% FileName = strcat('NoiseResults',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
-% save(FileName,'F','newS','Response','allts','bigLambda','numChans','nunits1',...
-%     'beta','spaceExp','N','RMS','bestMaps','totalUnits');
+fileName = strcat(EphysFileName(1:end-9),'-Results.mat');
+save(fileName,'finalResultsNormal','finalResultsPoisson','allts','totalUnits',...
+    'reducedSpikeCount','DIM','unbiasedS','movement',...
+    'xaxis','yaxis','basisStdDevs','reducedMov');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans

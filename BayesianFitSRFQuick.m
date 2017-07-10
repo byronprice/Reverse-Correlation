@@ -146,15 +146,15 @@ for ii=1:totalUnits
    end
 end
 
-reducedSpikeCount = zeros(totalUnits,numStimuli,0.5*timeMultiplier);
+reducedSpikeCount = zeros(totalUnits,numStimuli,1*timeMultiplier);
 for ii=1:totalUnits
     for jj=1:numStimuli
-        timeInds = stimTimes(jj):stimTimes(jj)+0.5*timeMultiplier-1;
+        timeInds = stimTimes(jj):stimTimes(jj)+1*timeMultiplier-1;
         reducedSpikeCount(ii,jj,:) = pointProcessSpikes(timeInds,ii)';
     end
 end
 
-clear pointProcessSpikes flipInterval;
+clear pointProcessSpikes;
 
 % INITIALIZE NUMBER OF PARAMETERS
 numFilters = 6; % 11 filters is 0.3 seconds/iteration, 6 is 0.14
@@ -302,23 +302,23 @@ fullImSize = DIM(1)*DIM(2);optimalAccept = 0.234;
 
 pi2 = pi/2;
 
-% myCluster = parcluster('local');
-% 
-% if getenv('ENVIRONMENT')
-%    myCluster.JobStorageLocation = getenv('TMPDIR'); 
-% end
-% 
-% parpool(myCluster,4);
+myCluster = parcluster('local');
+
+if getenv('ENVIRONMENT')
+   myCluster.JobStorageLocation = getenv('TMPDIR'); 
+end
+
+parpool(myCluster,4);
 
 PosteriorSamples = zeros(totalUnits,numParameters,length(burnIn+1:skipRate:numIter));
 % PosteriorMean = zeros(totalUnits,numParameters);
 % PosteriorInterval = zeros(totalUnits,numParameters,2);
-for zz=1:totalUnits
+parfor zz=1:totalUnits
         % ORGANIZE DATA
         spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
         numStimuli = size(spikeTrain,1);
         
-        spikeTrain = sum(spikeTrain(:,50:200),2);
+        spikeTrain = sum(spikeTrain(:,50:500),2);
         designMatrix = ones(numStimuli,1);
         [b,~,~] = glmfit(designMatrix,spikeTrain,'poisson','constant','off');
        
@@ -327,7 +327,7 @@ for zz=1:totalUnits
         designPrior(designVec,:) = [b(1),0];
         
         %MCMC intialization
-        numStarts = 500;
+        numStarts = 10;
         parameterVec = zeros(numParameters,numStarts);
         posteriorProb = zeros(numStarts,1);
         
@@ -357,7 +357,7 @@ for zz=1:totalUnits
         sigma = diag(variances);
         halfSigma = cholcov(sigma);
         identity = eye(numParameters);
-        pcaW = eye(numParameters);
+        pcaW = eye(numParameters); %pcaW = normrnd(0,1,numParameters);
         
         updateParam = 0.1;
         
@@ -443,10 +443,9 @@ for zz=1:totalUnits
 %                 (timePrior(2,1)-1).*parameterVec(timeVec(2),ii)-exp(parameterVec(timeVec(2),ii))./timePrior(2,2);
 
             count = designVec(end);
-            logprior = logprior-0.5*log(gaborPrior(1,2))-...
+            logprior = logprior-...
                     (parameterVec(count+1,ii))*(parameterVec(count+1,ii))./...
                     (2*gaborPrior(1,2))-...
-                    0.5*log(gaborPrior(2,2))-...
                    (parameterVec(count+2,ii))*(parameterVec(count+2,ii))./...
                     (2*gaborPrior(2,2))+...
                     (gaborPrior(3,1)-1).*parameterVec(count+3,ii)-exp(parameterVec(count+3,ii))./gaborPrior(3,2)+...
@@ -464,7 +463,7 @@ for zz=1:totalUnits
             % END CALCULATE POSTERIOR
             loglambda = log(2.38*2.38).*ones(numParameters,1);
             eigenvals = variances;
-            for kk=1:500
+            for kk=1:2e4
                 
                 index = unidrnd(numParameters);%unidrnd(numParameters);
                 lambda = loglambda(index);
@@ -535,10 +534,9 @@ for zz=1:totalUnits
 %                         (timePrior(2,1)-1).*pStar(timeVec(2))-exp(pStar(timeVec(2)))./timePrior(2,2);
                     
                     count = designVec(end);
-                    logprior = logprior-0.5*log(gaborPrior(1,2))-...
+                    logprior = logprior-...
                             (pStar(count+1))*(pStar(count+1))./...
                             (2*gaborPrior(1,2))-...
-                            0.5*log(gaborPrior(2,2))-...
                             (pStar(count+2))*(pStar(count+2))./...
                             (2*gaborPrior(2,2))+...
                             (gaborPrior(3,1)-1).*pStar(count+3)-exp(pStar(count+3))./gaborPrior(3,2)+...
@@ -558,18 +556,18 @@ for zz=1:totalUnits
                         posteriorProb(ii) = loglikelihood+logprior;
                     end
                  
-%                     if mod(kk,100) == 0
-%                         meanSubtract = parameterVec(:,ii)-updateMu;
-%                         updateMu = updateMu+updateParam.*meanSubtract;
-%                         halfSigma = halfSigma+updateParam.*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
-%                             meanSubtract')*((inv(halfSigma))')-identity)-halfSigma);
+                    if mod(kk,250) == 0
+                        meanSubtract = parameterVec(:,ii)-updateMu;
+                        updateMu = updateMu+updateParam.*meanSubtract;
+                        halfSigma = halfSigma+updateParam.*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
+                            meanSubtract')*((inv(halfSigma))')-identity)-halfSigma);
 %                         sigma = halfSigma'*halfSigma;
 %                         
 %                         Z = inv(tril(pcaW'*pcaW)')'*pcaW';
 %                         pcaW = sigma*Z'*inv(triu(Z*sigma*Z'));
 %                         pcaW = normc(pcaW);
 %                         eigenvals = diag(pcaW'*sigma*pcaW);
-%                     end
+                    end
                     lambda = lambda+updateParam.*(exp(min(0,logA))-optimalAccept);
                     
                 else
@@ -577,8 +575,8 @@ for zz=1:totalUnits
                 end
 %                 scatter(kk,posteriorProb(ii));%hold on;title(sprintf('Window: %d - %d',ceil(exp(parameterVec(timeVec(1),ii))),...
 %                    % ceil(exp(parameterVec(timeVec(2),ii)))));
-%                 axis([0 500 -2000 0]);
-%                 pause(0.01);hold on;
+%                 axis([0 1e4 -2000 1e4]);
+%                 hold on;
                 loglambda(index) = lambda;
         
             end
@@ -589,13 +587,12 @@ for zz=1:totalUnits
         [maxPost,ind] = max(posteriorProb);
         posteriorProb = maxPost;
         parameterVec = parameterVec(:,ind);
+        maxPost
         
-        temp = exp(loglambda).*eigenvals;
-        loglambda = log(2.38*2.38).*ones(numParameters,1);
-        eigenvals = temp./exp(loglambda);clear temp;
-        
-        pcaW = normrnd(0,1,numParameters);
-        pcaW = normc(pcaW);
+%         eigenvals = variances;
+%         
+%         pcaW = normrnd(0,1,numParameters);
+%         pcaW = normc(pcaW);
         updateParam = logspace(-0.3,-2,burnIn);
         for iter=1:burnIn
                 
@@ -656,10 +653,9 @@ for zz=1:totalUnits
 %                         (timePrior(2,1)-1).*pStar(timeVec(2))-exp(pStar(timeVec(2)))./timePrior(2,2);
                     
                     count = designVec(end);
-                    logprior = logprior-0.5*log(gaborPrior(1,2))-...
+                    logprior = logprior-...
                             (pStar(count+1))*(pStar(count+1))./...
                             (2*gaborPrior(1,2))-...
-                            0.5*log(gaborPrior(2,2))-...
                             (pStar(count+2))*(pStar(count+2))./...
                             (2*gaborPrior(2,2))+...
                             (gaborPrior(3,1)-1).*pStar(count+3)-exp(pStar(count+3))./gaborPrior(3,2)+...
@@ -680,17 +676,17 @@ for zz=1:totalUnits
                         posteriorProb = loglikelihood+logprior;
                     end
                     
-                    if mod(iter,200) == 0 || iter < 5000
+                    if mod(iter,250) == 0 
                         meanSubtract = parameterVec-updateMu;
                         updateMu = updateMu+updateParam(iter).*meanSubtract;
                         halfSigma = halfSigma+updateParam(iter).*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
                             meanSubtract')*((inv(halfSigma))')-identity)-halfSigma);
-                        sigma = halfSigma'*halfSigma;
-                        
-                        Z = inv(tril(pcaW'*pcaW)')'*pcaW';
-                        pcaW = sigma*Z'*inv(triu(Z*sigma*Z'));
-                        pcaW = normc(pcaW);
-                        eigenvals = diag(pcaW'*sigma*pcaW);
+%                         sigma = halfSigma'*halfSigma;
+%                         
+%                         Z = inv(tril(pcaW'*pcaW)')'*pcaW';
+%                         pcaW = sigma*Z'*inv(triu(Z*sigma*Z'));
+%                         pcaW = normc(pcaW);
+%                         eigenvals = diag(pcaW'*sigma*pcaW);
                         lambda = lambda+updateParam(iter).*(exp(min(0,logA))-optimalAccept);
                     end
                     
@@ -700,31 +696,38 @@ for zz=1:totalUnits
                 loglambda(index) = lambda;
         
         end
+        clear updateParam;
         
-        tempEigs = [];tempW = [];
-        for ii=1:numParameters
-           if eigenvals(ii) > 1e-8
-              tempEigs = [tempEigs;eigenvals(ii)];
-              tempW = [tempW,pcaW(:,ii)];
-           end
-        end
-        
-        eigenvals = tempEigs;
-        pcaW = tempW;clear tempEigs tempW;
-        effectiveParams = length(eigenvals);
+%         tempEigs = [];tempW = [];
+%         for ii=1:numParameters
+%            if eigenvals(ii) > 1e-8
+%               tempEigs = [tempEigs;eigenvals(ii)];
+%               tempW = [tempW,pcaW(:,ii)];
+%            end
+%         end
+%         
+%         eigenvals = tempEigs;
+%         pcaW = tempW;clear tempEigs tempW;
+%         effectiveParams = length(eigenvals);
         
         currentParams = parameterVec;currentProb = posteriorProb;
         parameterVec = zeros(numParameters,(numIter-burnIn)/skipRate);
         
         parameterVec(:,1) = currentParams;
+        figure();plot(currentParams);
+        currentProb
         
+        sigma = halfSigma'*halfSigma;
+        lambda = 2.38*2.38/numParameters;sigma = lambda.*sigma;
+        proposalMu = zeros(numParameters,1);
         bigCount = 2;
         for iter=2:(numIter-burnIn)
                 
-                index = unidrnd(effectiveParams);
-                lambda = loglambda(index);
-                stdev = sqrt(exp(lambda).*eigenvals(index));
-                pStar = currentParams+pcaW(:,index)*normrnd(0,stdev);
+%                 index = unidrnd(effectiveParams);
+%                 lambda = loglambda(index);
+%                 stdev = sqrt(exp(lambda).*eigenvals(index));
+%                 pStar = currentParams+pcaW(:,index)*normrnd(0,stdev);
+                pStar = currentParams+mvnrnd(proposalMu,sigma)';
 
                 if sum(pStar<=Bounds(:,1)) == 0 && sum(pStar>=Bounds(:,2)) == 0
                     % calculate posterior
@@ -778,10 +781,9 @@ for zz=1:totalUnits
 %                         (timePrior(2,1)-1).*pStar(timeVec(2))-exp(pStar(timeVec(2)))./timePrior(2,2);
                     
                     count = designVec(end);
-                    logprior = logprior-0.5*log(gaborPrior(1,2))-...
+                    logprior = logprior-...
                             (pStar(count+1))*(pStar(count+1))./...
                             (2*gaborPrior(1,2))-...
-                            0.5*log(gaborPrior(2,2))-...
                             (pStar(count+2))*(pStar(count+2))./...
                             (2*gaborPrior(2,2))+...
                             (gaborPrior(3,1)-1).*pStar(count+3)-exp(pStar(count+3))./gaborPrior(3,2)+...
@@ -833,7 +835,7 @@ for zz=1:totalUnits
             subplot(numRows,numColumns,ii);histogram(PosteriorSamples(zz,:,:));
         end
 end
-% delete(gcp);
+delete(gcp);
 fileName = strcat(EphysFileName(1:end-9),'-Results.mat');
 save(fileName,'PosteriorSamples','unbiasedS','reducedSpikeCount','totalUnits','allts','stimTimes','xaxis','yaxis');
 end
