@@ -47,7 +47,7 @@ load('NoiseVars.mat');
 
 switch nargin
     case 1
-        NoiseType = 'pinkHC';
+        NoiseType = 'pink';
 end
 % Acquire a handle to OpenGL, so we can use OpenGL commands in our code:
 global GL;
@@ -173,7 +173,7 @@ usb.stopRecording;
 % Close window
 Screen('CloseAll');
 Priority(0);
-
+NoiseType = 'pinkHC';
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
