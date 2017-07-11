@@ -126,6 +126,11 @@ for ii=1:numStimuli
     unbiasedS(ii,:) = temp;
 end
 
+if strcmp(NoiseType,'pinkHC') == 1
+   unbiasedS(unbiasedS<60) = 0;unbiasedS(unbiasedS>=60 & unbiasedS<196) = 127;
+   unbiasedS(unbiasedS>=196) = 255;
+end
+
 clear S S_f U V u v;
 
 % REORGANIZE SPIKING DATA
@@ -219,7 +224,7 @@ clearvars -except EphysFileName totalUnits numStimuli ...
     X Y totalMillisecs reducedMov movement;
 
 fullSize = DIM(1)*DIM(2);
-basisStdDevs = [10,25,50,75,100,150,200,250,500];
+basisStdDevs = [200,300,400,450,500,550,600,650,700,750,1000];
 numStdDevs = length(basisStdDevs);
 
 finalResultsPoissonB = cell(totalUnits,numStdDevs);
@@ -238,8 +243,8 @@ for zz=1:totalUnits
    gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
        ((y-yc).*(y-yc))./(2*std*std));
    
-   center1 = xaxis(1:3:end);
-   center2 = yaxis(1:3:end);
+   center1 = xaxis(1:4:end);
+   center2 = yaxis(1:4:end);
    numBasis1 = length(center1);
    numBasis2 = length(center2);
    totalParams = numBasis1*numBasis2;
@@ -251,7 +256,6 @@ for zz=1:totalUnits
            for jj=1:numBasis2
                temp = gaussFun(X,Y,center1(ii),center2(jj),basisStdDevs(stddev));
                basisFuns(:,count) = temp(:)./max(temp(:));
-               imagesc(temp);pause(0.1);
                count = count+1;
            end
        end
@@ -271,7 +275,7 @@ for zz=1:totalUnits
    clear spikeTrain movDesign basisFuns center1 center2 numBasis1 numBasis2 totalParams;
 end
 
-fileName = strcat(EphysFileName(1:end-9),'-Results.mat');
+fileName = strcat(EphysFileName(1:end-9),'-GLMResults.mat');
 save(fileName,'finalResultsNormalB','finalResultsPoissonB',...
     'finalResultsNormalDev','finalResultsPoissonDev',...
     'finalResultsNormalSE','finalResultsPoissonSE','allts','totalUnits',...

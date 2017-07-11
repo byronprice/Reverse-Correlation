@@ -56,7 +56,7 @@ usb = usb1208FSPlusClass;
 % Make sure this is running on OpenGL Psychtoolbox:
 AssertOpenGL;
 
-TimeEstimate = numStimuli*(flipInterval+1)/60+3*0.5;
+TimeEstimate = numStimuli*(flipInterval+WaitTime+0.5)/60+3*0.5;
 fprintf('\nEstimated time is %3.2f minutes.',TimeEstimate);
 WaitSecs(5);
 
@@ -141,7 +141,7 @@ tt = 1;
 vbl = Screen('Flip',win);
 while tt <= numStimuli/2
     % Convert it to a texture 'tex':
-    Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
+    Img = reshape(Sdisplay(tt,:),[DIM(2),DIM(1)]);
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
                                         % 1 is bilinear filter
@@ -157,7 +157,7 @@ WaitSecs(30);
 vbl = Screen('Flip',win);
 while tt <= numStimuli
     % Convert it to a texture 'tex':
-    Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
+    Img = reshape(Sdisplay(tt,:),[DIM(2),DIM(1)]);
     tex = Screen('MakeTexture',win,Img);
     Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
                                         % 1 is bilinear filter

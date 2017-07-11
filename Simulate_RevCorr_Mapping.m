@@ -1,5 +1,5 @@
 % SIMULATE DATA and test algorithm
-numStimuli = 4000;train = round(numStimuli*0.7);
+numStimuli = 2200;train = round(numStimuli*0.7);
 N = 30;
 DIM = [N,N,numStimuli];beta = -3;
 
@@ -50,6 +50,10 @@ temp = unbiasedS;
 currentMin = min(temp(:));currentMax = max(temp(:));
 unbiasedS = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
 clear temp;
+
+S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
+unbiasedS(unbiasedS<60) = 0;unbiasedS(unbiasedS>=60 & unbiasedS<196) = 127;
+unbiasedS(unbiasedS>=196) = 255;
 
 gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
     exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
