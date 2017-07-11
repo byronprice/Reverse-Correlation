@@ -219,13 +219,15 @@ clearvars -except EphysFileName totalUnits numStimuli ...
     X Y totalMillisecs reducedMov movement;
 
 fullSize = DIM(1)*DIM(2);
-basisStdDevs = [100,150,200,250,300,400,500,1000];
+basisStdDevs = [10,25,50,75,100,150,200,250,500];
 numStdDevs = length(basisStdDevs);
 
-finalResultsPoisson = struct('b',cell(totalUnits,numStdDevs),...
-    'deviance',cell(totalUnits,numStdDevs),'stats',cell(totalUnits,numStdDevs));
-finalResultsNormal = struct('b',cell(totalUnits,numStdDevs),...
-    'deviance',cell(totalUnits,numStdDevs),'stats',cell(totalUnits,numStdDevs));
+finalResultsPoissonB = cell(totalUnits,numStdDevs);
+finalResultsPoissonDev = cell(totalUnits,numStdDevs);
+finalResultsPoissonSE = cell(totalUnits,numStdDevs);
+finalResultsNormalB = cell(totalUnits,numStdDevs);
+finalResultsNormalDev = cell(totalUnits,numStdDevs);
+finalResultsNormalSE = cell(totalUnits,numStdDevs);
 for zz=1:totalUnits
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
    spikeTrain = sum(spikeTrain(:,50:500),2);
@@ -248,20 +250,21 @@ for zz=1:totalUnits
        for ii=1:numBasis1
            for jj=1:numBasis2
                temp = gaussFun(X,Y,center1(ii),center2(jj),basisStdDevs(stddev));
-               basisFuns(:,count) = temp(:);
+               basisFuns(:,count) = temp(:)./max(temp(:));
+               imagesc(temp);pause(0.1);
                count = count+1;
            end
        end
        design = [movDesign,unbiasedS*basisFuns];
        [bPoiss,devPoiss,statsPoiss] = glmfit(design,spikeTrain,'poisson');
-       finalResultsPoisson.b{zz,stddev} = bPoiss;
-       finalResultsPoisson.deviance{zz,stddev} = devPoiss;
-       finalResultsPoisson.stats{zz,stddev} = statsPoiss;
+       finalResultsPoissonB{zz,stddev} = bPoiss;
+       finalResultsPoissonDev{zz,stddev} = devPoiss;
+       finalResultsPoissonSE{zz,stddev} = statsPoiss.se;
        
        [b,dev,stats] = glmfit(design,spikeTrain);
-       finalResultsNormal.b{zz,stddev} = b;
-       finalResultsNormal.deviance{zz,stddev} = dev;
-       finalResultsNormal.stats{zz,stddev} = stats;
+       finalResultsNormalB{zz,stddev} = b;
+       finalResultsNormalDev{zz,stddev} = dev;
+       finalResultsNormalSE{zz,stddev} = stats.se;
        
        clear bPoiss devPoiss statsPoiss b dev stats count design;
    end
@@ -269,7 +272,9 @@ for zz=1:totalUnits
 end
 
 fileName = strcat(EphysFileName(1:end-9),'-Results.mat');
-save(fileName,'finalResultsNormal','finalResultsPoisson','allts','totalUnits',...
+save(fileName,'finalResultsNormalB','finalResultsPoissonB',...
+    'finalResultsNormalDev','finalResultsPoissonDev',...
+    'finalResultsNormalSE','finalResultsPoissonSE','allts','totalUnits',...
     'reducedSpikeCount','DIM','unbiasedS','movement',...
     'xaxis','yaxis','basisStdDevs','reducedMov');
 
