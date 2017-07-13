@@ -151,11 +151,11 @@ WaitSecs(30);
 usb.strobeEventWord(startEXP);WaitSecs(1);
 tt = 1;
 vbl = Screen('Flip',win);
-while tt <= numStimuli/2
+while tt <= numStimuli
     if tcpipClient.BytesAvailable > 0
         data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
         if sum(data) > 0
-            WaitSecs(1);
+            WaitSecs(2);
         else
             % Convert it to a texture 'tex':
             Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
