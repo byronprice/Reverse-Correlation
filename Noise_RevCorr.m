@@ -39,7 +39,7 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/06/21
+% Updated: 2017/07/12
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -49,6 +49,17 @@ switch nargin
     case 1
         NoiseType = 'pink';
 end
+
+% for motion-contingent display / interaction with recording computer
+startEXP = 254;
+endEXP = 255;
+
+tcpipClient = tcpip('128.197.59.169',30000,'NetworkRole','client');
+bufferSize = 50000; % bytes, (we won't need this much)
+set(tcpipClient,'InputBufferSize',bufferSize);
+set(tcpipClient,'Timeout',5);
+fopen(tcpipClient);
+
 % Acquire a handle to OpenGL, so we can use OpenGL commands in our code:
 global GL;
 usb = usb1208FSPlusClass;
@@ -58,7 +69,7 @@ AssertOpenGL;
 
 TimeEstimate = numStimuli*(flipInterval+WaitTime+0.5)/60+3*0.5;
 fprintf('\nEstimated time is %3.2f minutes.',TimeEstimate);
-WaitSecs(5);
+WaitSecs(1);
 
 % Choose screen with maximum id - the secondary display:
 screenid = max(Screen('Screens'));
@@ -120,8 +131,8 @@ for ii=1:numStimuli
     S(ii,:) = Y-difference;
 end
 S = uint8(S);
-Sdisplay = S;
-Sdisplay(S<60) = 0;Sdisplay(S>=60 & S<196) = 127;Sdisplay(S>=196) = 255;
+% Sdisplay = S;
+% Sdisplay(S<60) = 0;Sdisplay(S>=60 & S<196) = 127;Sdisplay(S>=196) = 255;
 
 wLow = round((w_pixels-maxPix)/2);
 wHigh = round(w_pixels-wLow);
@@ -137,50 +148,47 @@ WaitTimes = WaitTime+unifrnd(0,1,[numStimuli,1]);
 
 usb.startRecording;usb.strobeEventWord(0);
 WaitSecs(30);
+usb.strobeEventWord(startEXP);WaitSecs(1);
 tt = 1;
 vbl = Screen('Flip',win);
 while tt <= numStimuli/2
-    % Convert it to a texture 'tex':
-    Img = reshape(Sdisplay(tt,:),[DIM(2),DIM(1)]);
-    tex = Screen('MakeTexture',win,Img);
-    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
-                                        % 1 is bilinear filter
-    vbl = Screen('Flip',win);usb.strobeEventWord(1);
-    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobeEventWord(2);
-    vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
-    Screen('Close',tex);
-    tt = tt+1;
+    if tcpipClient.BytesAvailable > 0
+        data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
+        if sum(data) > 0
+            WaitSecs(1);
+        else
+            % Convert it to a texture 'tex':
+            Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
+            tex = Screen('MakeTexture',win,Img);
+            Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
+            % 1 is bilinear filter
+            vbl = Screen('Flip',win);usb.strobeEventWord(1);
+            vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobeEventWord(2);
+            vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
+            Screen('Close',tex);
+            tt = tt+1;
+        end
+    end
+    if mod(tt,numStimuli/2) == 0
+        Screen('Flip',win);usb.strobeEventWord(0);
+        WaitSecs(30);
+    end
 end
-Screen('Flip',win);usb.strobeEventWord(0);
-WaitSecs(30);
 
-vbl = Screen('Flip',win);
-while tt <= numStimuli
-    % Convert it to a texture 'tex':
-    Img = reshape(Sdisplay(tt,:),[DIM(2),DIM(1)]);
-    tex = Screen('MakeTexture',win,Img);
-    Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
-                                        % 1 is bilinear filter
-    vbl = Screen('Flip',win);usb.strobeEventWord(1);
-    vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobeEventWord(2);
-    vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
-    Screen('Close',tex);
-    tt = tt+1;
-end
 Screen('Flip',win);usb.strobeEventWord(0);
-WaitSecs(30);
+usb.strobeEventWord(endEXP);
+WaitSecs(1);
 usb.stopRecording;
 % Close window
 Screen('CloseAll');
 Priority(0);
-NoiseType = 'pinkHC';
+% NoiseType = 'pinkHC';
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix',...
-    'Sdisplay');
+    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
