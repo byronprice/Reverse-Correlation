@@ -310,7 +310,7 @@ numIter = 17e5;burnIn = 2e5;skipRate = 1000;
 fullImSize = DIM(1)*DIM(2);optimalAccept = 0.234;
 
 twopi = 2*pi;
-
+pi2 = pi/2;
 % myCluster = parcluster('local');
 % 
 % if getenv('ENVIRONMENT')
@@ -470,7 +470,8 @@ for zz=1:totalUnits
             % END CALCULATE POSTERIOR
             loglambda = log(2.38*2.38).*ones(numParameters,1);
             eigenvals = variances;
-            for kk=1:5e5
+            figure();
+            for kk=1:2e4
                 
                 index = unidrnd(numParameters);%unidrnd(numParameters);
                 lambda = loglambda(index);
