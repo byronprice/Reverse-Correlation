@@ -1,5 +1,6 @@
 % SIMULATE DATA and test algorithm
-numStimuli = 2200;train = round(numStimuli*0.7);
+warning('off','all');
+numStimuli = 5000;train = round(numStimuli*0.7);
 N = 30;
 DIM = [N,N,numStimuli];beta = -3;
 
@@ -51,9 +52,7 @@ currentMin = min(temp(:));currentMax = max(temp(:));
 unbiasedS = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
 clear temp;
 
-S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
-unbiasedS(unbiasedS<60) = 0;unbiasedS(unbiasedS>=60 & unbiasedS<196) = 127;
-unbiasedS(unbiasedS>=196) = 255;
+% S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
 
 gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
     exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
@@ -64,11 +63,11 @@ gaborFun = @(x,y,t,k,n,v,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
 nonLinFun = @(x,base,slope,rise,drop) rise.*exp((x-base)/slope)./(1+exp((x-base)/slope))-drop;
 
 x = linspace(-15,15,N);y = linspace(-15,15,N);
-t = linspace(150,0,10);
-[x,y,t] = meshgrid(x,y,t);
-gabor = gaborFun(x,y,t,0.4,15,0,pi/6,0,0,4,3,0.1,60*pi/180,0);
+t = linspace(150,0,30);
+[X,Y,T] = meshgrid(x,y,t);
+gabor = gaborFun(X,Y,T,0.4,15,0,pi/6,0,0,4,3,0.1,60*pi/180,0);
 gaborEnergy = sum(gabor(:).*gabor(:));
-timePoints = size(t,3);
+timePoints = size(T,3);
 
 base = 20;slope = 5;rise = 5;drop = 0;
 
@@ -87,62 +86,145 @@ for ii=timePoints:numStimuli
     newS(ii-(timePoints-1),:) = temp(:);
 end
 clear unbiasedS S;
-L = zeros(N*N*timePoints,N*N*timePoints,'single');
+% L = zeros(N*N*timePoints,N*N*timePoints,'single');
+% 
+% %operator = [0,-1,0;-1,4,-1;0,-1,0];
+% bigCount = 1;
+% for kk=1:timePoints
+%     for jj=1:N
+%         for ii=1:N
+%             tempMat = zeros(N,N,timePoints);
+%             tempMat(ii,jj,kk) = 6;
+%             if ii > 1
+%                 tempMat(ii-1,jj,kk) = -1;
+%             end
+%             if ii < N
+%                 tempMat(ii+1,jj,kk) = -1;
+%             end
+%             if jj > 1
+%                 tempMat(ii,jj-1,kk) = -1;
+%             end
+%             if jj < N
+%                 tempMat(ii,jj+1,kk) = -1;
+%             end
+%             if kk > 1
+%                 tempMat(ii,jj,kk-1) = -1;
+%             end
+%             if kk < timePoints
+%                 tempMat(ii,jj,kk+1) = -1;
+%             end
+%             L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+%         end
+%     end
+% end
+% 
+% bigLambda = logspace(1,4,5);
+% RMS = zeros(length(bigLambda),1);
+% tempF = zeros(length(bigLambda),N*N*timePoints);
+% for ii=1:length(bigLambda)
+%     A = [newS(1:train,:);bigLambda(ii).*L];
+%     constraints = [r(1:train);zeros(N*N*timePoints,1)];
+%     fhat = double(A)\double(constraints);
+%     tempF(ii,:) = fhat;
+%     RMS(ii) = norm(r(train+1:end)-newS(train+1:end,:)*fhat)./sqrt(N*N*timePoints);
+%     display(ii);
+% end
+% [~,bestMap] = min(RMS);
+% 
+% constraints = [double(r);zeros(N*N*timePoints,1)];
+% A = [double(newS);double(bigLambda(bestMap).*L)];
+% fhat = A\constraints;
+% 
+% %fhat = tempF(bestMap,:);
+% 
+% fhat = reshape(fhat,[N,N,timePoints]);
+% minVal = min(fhat(:));maxVal = max(fhat(:));
+% min2 = min(gabor(:));max2 = max(gabor(:));
+% for ii=1:timePoints
+%    subplot(1,2,1);imagesc(fhat(:,:,ii));caxis([minVal maxVal]);
+%    subplot(1,2,2);imagesc(gabor(:,:,ii));caxis([min2 max2]);
+%    pause(1);
+% end
 
-%operator = [0,-1,0;-1,4,-1;0,-1,0];
-bigCount = 1;
-for kk=1:timePoints
-    for jj=1:N
-        for ii=1:N
-            tempMat = zeros(N,N,timePoints);
-            tempMat(ii,jj,kk) = 6;
-            if ii > 1
-                tempMat(ii-1,jj,kk) = -1;
+% GLM approach
+gaussFun = @(x,y,t,xc,yc,tc,stdxy,stdt) exp(-((x-xc).*(x-xc))./(2*stdxy*stdxy)-...
+    ((y-yc).*(y-yc))./(2*stdxy*stdxy)-((t-tc).*(t-tc))./(2*stdt*stdt));
+centerSpace = x(1:2:end);
+centerTime = t(1:2:end);
+numBasisSpace = length(centerSpace);
+numBasisTime = length(centerTime);
+basisSpaceStds = [5,6,10,15,20,25,50];
+basisTimeStds = [5,10,25,50,75,100,150,200];
+
+numSpaceStds = length(basisSpaceStds);
+numTimeStds = length(basisTimeStds);
+
+fullSize = N*N*timePoints;
+totalParams = numBasisSpace^2*numBasisTime;
+basisFuns = zeros(fullSize,totalParams);
+
+heldOutDeviance = zeros(numSpaceStds,numTimeStds);
+for yy=1:numSpaceStds
+    for zz=1:numTimeStds
+        count = 1;
+        for ii=1:numBasisTime
+            for jj=1:numBasisSpace
+                for kk=1:numBasisSpace
+                    temp = gaussFun(X,Y,T,centerSpace(jj),centerSpace(kk),...
+                        centerTime(ii),basisSpaceStds(yy),basisTimeStds(zz));
+                    basisFuns(:,count) = temp(:)./max(temp(:));
+%                     subplot(2,1,1);imagesc(temp(:,:,ii));
+%                     temp2 = temp(:,:,ii);
+%                     [~,idx] = max(temp2(:));
+%                     [row,col] = ind2sub(size(temp2),idx);
+%                     subplot(2,1,2);plot(squeeze(temp(row,col,:)));
+%                     pause(0.1);
+                    count = count+1;
+                end
             end
-            if ii < N
-                tempMat(ii+1,jj,kk) = -1;
-            end
-            if jj > 1
-                tempMat(ii,jj-1,kk) = -1;
-            end
-            if jj < N
-                tempMat(ii,jj+1,kk) = -1;
-            end
-            if kk > 1
-                tempMat(ii,jj,kk-1) = -1;
-            end
-            if kk < timePoints
-                tempMat(ii,jj,kk+1) = -1;
-            end
-            L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+        end
+        spikeTrain = r(1:train);
+        design = newS(1:train,:)*basisFuns;
+        [b,~,~] = glmfit(design,spikeTrain,'poisson');
+        
+        testDesign = [ones(length(r(train+1:end)),1),newS(train+1:end,:)*basisFuns];
+        testTrain = r(train+1:end);
+        mu = exp(testDesign*b);
+        temp = testTrain.*log(testTrain./mu)-(testTrain-mu);
+        temp(isnan(temp)) = mu(isnan(temp));
+        
+        heldOutDeviance(yy,zz) = sum(temp);
+    end
+end
+
+[~,idx] = min(heldOutDeviance(:));
+[row,col] = ind2sub(size(heldOutDeviance),idx);
+
+bestSpaceStd = basisSpaceStds(row);
+bestTimeStd = basisTimeStds(col);
+
+count = 1;
+for ii=1:numBasisTime
+    for jj=1:numBasisSpace
+        for kk=1:numBasisSpace
+            temp = gaussFun(X,Y,T,centerSpace(jj),centerSpace(kk),...
+                centerTime(ii),bestSpaceStd,bestTimeStd);
+            basisFuns(:,count) = temp(:)./max(temp(:));
+            count = count+1;
         end
     end
 end
 
-bigLambda = logspace(1,4,5);
-RMS = zeros(length(bigLambda),1);
-tempF = zeros(length(bigLambda),N*N*timePoints);
-for ii=1:length(bigLambda)
-    A = [newS(1:train,:);bigLambda(ii).*L];
-    constraints = [r(1:train);zeros(N*N*timePoints,1)];
-    fhat = double(A)\double(constraints);
-    tempF(ii,:) = fhat;
-    RMS(ii) = norm(r(train+1:end)-newS(train+1:end,:)*fhat)./sqrt(N*N*timePoints);
-    display(ii);
-end
-[~,bestMap] = min(RMS);
+spikeTrain = r;
+design = newS*basisFuns;
+[b,~,~] = glmfit(design,spikeTrain,'poisson');
 
-constraints = [double(r);zeros(N*N*timePoints,1)];
-A = [double(newS);double(bigLambda(bestMap).*L)];
-fhat = A\constraints;
-
-%fhat = tempF(bestMap,:);
-
+fhat = basisFuns*b(2:end);
 fhat = reshape(fhat,[N,N,timePoints]);
 minVal = min(fhat(:));maxVal = max(fhat(:));
 min2 = min(gabor(:));max2 = max(gabor(:));
 for ii=1:timePoints
    subplot(1,2,1);imagesc(fhat(:,:,ii));caxis([minVal maxVal]);
    subplot(1,2,2);imagesc(gabor(:,:,ii));caxis([min2 max2]);
-   pause(0.5);
+   pause(1);
 end

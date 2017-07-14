@@ -224,7 +224,7 @@ clearvars -except EphysFileName totalUnits numStimuli ...
     X Y totalMillisecs reducedMov movement;
 
 fullSize = DIM(1)*DIM(2);
-basisStdDevs = [200,300,400,450,500,550,600,650,700,750,1000];
+basisStdDevs = [200,300,400,450,500,550,600,650,700,750,1000,1250,1500,2000];
 numStdDevs = length(basisStdDevs);
 
 finalResultsPoissonB = cell(totalUnits,numStdDevs);
@@ -235,16 +235,16 @@ finalResultsNormalDev = cell(totalUnits,numStdDevs);
 finalResultsNormalSE = cell(totalUnits,numStdDevs);
 for zz=1:totalUnits
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
-   spikeTrain = sum(spikeTrain(:,50:500),2);
-   movDesign = sum(reducedMov(:,50:500),2);
+   spikeTrain = sum(spikeTrain(:,50:300),2);
+   movDesign = sum(reducedMov(:,50:300),2);
    
    %    r = spikeTrain;
    %    fhat = unbiasedS\r;
    gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
        ((y-yc).*(y-yc))./(2*std*std));
    
-   center1 = xaxis(1:4:end);
-   center2 = yaxis(1:4:end);
+   center1 = xaxis(1:3:end);
+   center2 = yaxis(1:3:end);
    numBasis1 = length(center1);
    numBasis2 = length(center2);
    totalParams = numBasis1*numBasis2;
