@@ -161,10 +161,10 @@ numFilters = 6; % 11 filters is 0.3 seconds/iteration, 6 is 0.14
 gaborRepeatParams = 5;
 gaborConstantParams = 4;
 gaborParams = gaborRepeatParams+gaborConstantParams;
-nonLinParams = 3;
+nonLinParams = 2;
 designParams = 1;
 sParams = numFilters-1;
-precisionParams = numFilters+designParams+nonLinParams;
+precisionParams = nonLinParams+numFilters;
 % timeParams = 2;
 numParameters = designParams+gaborConstantParams+gaborRepeatParams*numFilters+...
     nonLinParams+precisionParams+sParams;%+timeParams;
@@ -208,9 +208,10 @@ gaborBounds(8,:) = [-250,250]; %  orientation theta
 gaborBounds(9,:) = [-250,250]; % phase shift phi
 
 nonLinBounds = zeros(nonLinParams,2);
-nonLinBounds(1,:) = [-Inf,Inf]; % sigmoid base
-nonLinBounds(2,:) = [-Inf,Inf]; % sigmoid slope
-nonLinBounds(3,:) = [-Inf,Inf]; % sigmoid rise
+nonLinBounds(1,:) = [-Inf,Inf]; % sigmoid base - take log for mcmc
+% nonLinBounds(2,:) = [-Inf,Inf]; % sigmoid slope - take log for mcmc
+nonLinBounds(2,:) = [-Inf,Inf]; % sigmoid rise % must be greater than 2 in normal space
+                   % take log for mcmc, greater than log(2) in log space
 
 precisionBounds = repmat([-Inf,Inf],[precisionParams,1]); % for any precision parameter
 
@@ -269,13 +270,16 @@ gaborPrior(1,:) = [0,1000*1000]; % normal(mean,variance), xc
 gaborPrior(2,:) = [0,1000*1000]; % normal, yc
 gaborPrior(3,:) = [20,15]; % gamma, std x
 gaborPrior(4,:) = [19,13]; % gamma, std y
-gaborPrior(5,:) = [0,0]; % normal, height of gabor, variance is a precision parameter
+gaborPrior(5,:) = [0,1]; % normal, height of gabor, variance is a precision parameter
 gaborPrior(6,:) = [0,1]; % von mises(mu,k), orientation of the exponential part of gabor
 gaborPrior(7,:) = cppPrior; % gamma, spatial frequency converted to units of pixels
 gaborPrior(8,:) = [0,0.5]; % von mises, gabor orientation (sinusoidal part)
 gaborPrior(9,:) = [0,0.5]; % von mises, phase phi
 
-nonLinPrior = [0,0;1,0;2,0]; % base slope rise ... slope and rise must be positive
+nonLinPrior = [1,0;1,0]; % slope rise ... base depends on the other two
+%  to constrain the nonlinearity, y = r./(1+exp(-(x-b)*s)) ...
+%  if x = 0, we require y = 1, which has a unique solution for any values
+%  of r and s, so long as r > 1 and b > 0
 precisionPrior = [1e-3,1e-3];
 
 sPrior = [0.5,0.5];
@@ -292,7 +296,7 @@ variances(count+3) = var(log(gamrnd(gaborPrior(3,1),gaborPrior(3,2),[1000,1])));
 variances(count+4) = var(log(gamrnd(gaborPrior(4,1),gaborPrior(4,2),[1000,1])));
 count = count+4;
 for ii=1:numFilters
-   variances(count+1) = 0.1;
+   variances(count+1) = 0.01;
    variances(count+2) = 25;
    variances(count+3) = var(log(gamrnd(gaborPrior(7,1),gaborPrior(7,2),[1000,1])));
    variances(count+4) = 25;
@@ -327,18 +331,18 @@ for zz=1:totalUnits
         spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
         numStimuli = size(spikeTrain,1);
         
-        spikeTrain = sum(spikeTrain(:,50:500),2);
+        spikeTrain = sum(spikeTrain(:,50:300),2);
         designMatrix = ones(numStimuli,1);
         [b,~,~] = glmfit(designMatrix,spikeTrain,'poisson','constant','off');
        
         designPrior = zeros(length(designVec),2);
         
-        designPrior(designVec,:) = [b(1),0];
+        designPrior(designVec,:) = [b(1),1];
         
         %MCMC intialization
         numStarts = 10;
         parameterVec = zeros(numParameters,numStarts);
-        posteriorProb = zeros(numStarts,1);
+        likelihood = zeros(numStarts,1);
         
         updateMu = zeros(numParameters,1);
         updateMu(designVec) = designPrior(designVec,1)+normrnd(0,0.1,[designParams,1]);
@@ -356,7 +360,7 @@ for zz=1:totalUnits
             updateMu(count+5) = normrnd(0,10);
             count = count+gaborRepeatParams;
         end
-        updateMu(nonLinVec) = [normrnd(0,1);log(gamrnd(4,1/4));log(gamrnd(8,1/4))];
+        updateMu(nonLinVec) = [log(gamrnd(4,0.25));log(gamrnd(4,0.25))];
         updateMu(precisionVec) = log(gamrnd(1,1,[precisionParams,1]));
         updateMu(sVec) = normrnd(0,10,[sParams,1]);
 %         updateMu(timeVec) = [log(normrnd(50,10));log(normrnd(200,10))];
@@ -386,7 +390,7 @@ for zz=1:totalUnits
                 parameterVec(count+5,ii) = normrnd(0,10);
                 count = count+gaborRepeatParams;
             end
-            parameterVec(nonLinVec,ii) = [normrnd(0,1);log(gamrnd(4,1/4));log(gamrnd(8,1/4))];
+            parameterVec(nonLinVec,ii) = [log(gamrnd(4,0.25));log(gamrnd(4,0.25))];
             parameterVec(precisionVec,ii) = log(gamrnd(1,1,[precisionParams,1]));
             parameterVec(sVec,ii) = normrnd(0,10,[sParams,1]);
 %             parameterVec(timeVec,ii) = [log(normrnd(50,10));log(normrnd(200,10))];
@@ -411,7 +415,7 @@ for zz=1:totalUnits
                 W(:,jj) = temp2(:);
                 count = count+gaborRepeatParams;
             end
-            nonLins = parameterVec(nonLinVec,ii);nonLins(2:3) = exp(nonLins(2:3));
+            nonLins = exp(parameterVec(nonLinVec,ii));
             sVals = 1./(1+exp(-0.1.*parameterVec(sVec,ii)));
             S = repmat((2.*binornd(1,sVals)-1)',[numStimuli,1]);
 
@@ -423,7 +427,8 @@ for zz=1:totalUnits
 %             end
             temp3 = unbiasedS*W;
             x = 0.5.*sum((temp3.*S).*temp3,2)+(b'*unbiasedS')';
-            x = nonLins(3)./(1+exp(-(x-nonLins(1)).*nonLins(2)));
+            base = log(nonLins(2)+1)/nonLins(1);
+            x = (nonLins(2)+2)./(1+exp(-(x-base).*nonLins(1)));
 
            % x = 0.5.*diag(unbiasedS*W*S*W'*unbiasedS')+(b'*unbiasedS')';
             mu = exp(designMatrix*parameterVec(designVec,ii)).*x;
@@ -432,18 +437,15 @@ for zz=1:totalUnits
             loglikelihood = sum(spikeTrain.*log(mu)-mu);
             
             phi = exp(parameterVec(precisionVec,ii));
-            logprior = 0.5*log(phi(1))-0.5*phi(1)*...
+            logprior = -(0.5/designPrior(designVec,2))*...
                 (parameterVec(designVec,ii)-designPrior(designVec,1))*...
                 (parameterVec(designVec,ii)-designPrior(designVec,1))+...
-                sum(0.5*log(phi(2:1+numFilters))-...
-                0.5*phi(2:1+numFilters).*...
+                sum(0.5*log(phi(1:numFilters))-(0.5*phi(1:numFilters)).*...
                 (parameterVec(bcPrecisionVec,ii).*parameterVec(bcPrecisionVec,ii)))+...
-                0.5*log(phi(end-2))-...
-                0.5*phi(end-2)*(nonLins(1)*nonLins(1))+...
-                (nonLins(2).*(-1/nonLinPrior(2,1))-log(nonLinPrior(2,1))).*phi(end-1)+...
-                log(phi(end-1))*phi(end-1)+(phi(end-1)-1).*log(nonLins(2))-log(gamma(phi(end-1)))+...
-                (nonLins(3).*(-1/nonLinPrior(3,1))-log(nonLinPrior(3,1))).*phi(end)+...
-                log(phi(end))*phi(end)+(phi(end)-1).*log(nonLins(3))-log(gamma(phi(end)))+...
+                (nonLins(1).*(-1/nonLinPrior(1,1))-log(nonLinPrior(1,1))).*phi(end-1)+...
+                log(phi(end-1))*phi(end-1)+(phi(end-1)-1).*log(nonLins(1))-log(gamma(phi(end-1)))+...
+                (nonLins(2).*(-1/nonLinPrior(2,1))-log(nonLinPrior(2,1))).*phi(end)+...
+                log(phi(end))*phi(end)+(phi(end)-1).*log(nonLins(2))-log(gamma(phi(end)))+...
                 sum((precisionPrior(1)-1).*log(phi)-phi.*precisionPrior(2))+...
                 sum((sPrior(1)-1).*log(sVals)+(sPrior(2)-1).*log(1-sVals));
 %                 (timePrior(1,1)-1).*parameterVec(timeVec(1),ii)-exp(parameterVec(timeVec(1),ii))./timePrior(1,2)+...
@@ -466,14 +468,14 @@ for zz=1:totalUnits
                 count = count+gaborRepeatParams;
             end
 
-            posteriorProb(ii) = loglikelihood+logprior;
+            likelihood(ii) = loglikelihood;
             % END CALCULATE POSTERIOR
             loglambda = log(2.38*2.38).*ones(numParameters,1);
             eigenvals = variances;
             figure();
             for kk=1:2e4
                 
-                index = unidrnd(numParameters);%unidrnd(numParameters);
+                index = unidrnd(numParameters-precisionParams);%unidrnd(numParameters);
                 lambda = loglambda(index);
                 stdev = sqrt(exp(lambda).*eigenvals(index));
                 pStar = parameterVec(:,ii)+pcaW(:,index)*normrnd(0,stdev);
@@ -502,7 +504,7 @@ for zz=1:totalUnits
                         count = count+gaborRepeatParams;
                     end
                     
-                    nonLins = pStar(nonLinVec);nonLins(2:3) = exp(nonLins(2:3));
+                    nonLins = exp(pStar(nonLinVec));
                     sVals = 1./(1+exp(-0.1.*pStar(sVec)));
                     S = repmat((2.*binornd(1,sVals)-1)',[numStimuli,1]);
                     
@@ -514,7 +516,8 @@ for zz=1:totalUnits
                     %             end
                     temp3 = unbiasedS*W;
                     x = 0.5.*sum((temp3.*S).*temp3,2)+(b'*unbiasedS')';
-                    x = nonLins(3)./(1+exp(-(x-nonLins(1)).*nonLins(2)));
+                    base = log(nonLins(2)+1)/nonLins(1);
+                    x = (nonLins(2)+2)./(1+exp(-(x-base).*nonLins(1)));
                     
                     mu = exp(designMatrix*pStar(designVec)).*x;
 %                     windowTimes = ceil(exp(pStar(timeVec)));
@@ -522,18 +525,15 @@ for zz=1:totalUnits
                     loglikelihood = sum(spikeTrain.*log(mu)-mu);
                     
                     phi = exp(pStar(precisionVec));
-                    logprior = 0.5*log(phi(1))-0.5*phi(1)*...
+                    logprior = -(0.5/designPrior(designVec,2))*...
                         (pStar(designVec)-designPrior(designVec,1))*...
                         (pStar(designVec)-designPrior(designVec,1))+...
-                        sum(0.5*log(phi(2:1+numFilters))-...
-                        0.5*phi(2:1+numFilters).*...
+                        sum(0.5*log(phi(1:numFilters))-(0.5*phi(1:numFilters)).*...
                         (pStar(bcPrecisionVec).*pStar(bcPrecisionVec)))+...
-                        0.5*log(phi(end-2))-...
-                        0.5*phi(end-2)*(nonLins(1)*nonLins(1))+...
-                        (nonLins(2).*(-1/nonLinPrior(2,1))-log(nonLinPrior(2,1))).*phi(end-1)+...
-                        log(phi(end-1))*phi(end-1)+(phi(end-1)-1).*log(nonLins(2))-log(gamma(phi(end-1)))+...
-                        (nonLins(3).*(-1/nonLinPrior(3,1))-log(nonLinPrior(3,1))).*phi(end)+...
-                        log(phi(end))*phi(end)+(phi(end)-1).*log(nonLins(3))-log(gamma(phi(end)))+...
+                        (nonLins(1).*(-1/nonLinPrior(1,1))-log(nonLinPrior(1,1))).*phi(end-1)+...
+                        log(phi(end-1))*phi(end-1)+(phi(end-1)-1).*log(nonLins(1))-log(gamma(phi(end-1)))+...
+                        (nonLins(2).*(-1/nonLinPrior(2,1))-log(nonLinPrior(2,1))).*phi(end)+...
+                        log(phi(end))*phi(end)+(phi(end)-1).*log(nonLins(2))-log(gamma(phi(end)))+...
                         sum((precisionPrior(1)-1).*log(phi)-phi.*precisionPrior(2))+...
                         sum((sPrior(1)-1).*log(sVals)+(sPrior(2)-1).*log(1-sVals));
 %                         (timePrior(1,1)-1).*pStar(timeVec(1))-exp(pStar(timeVec(1)))./timePrior(1,2)+...
@@ -555,11 +555,11 @@ for zz=1:totalUnits
                             gaborPrior(9,2).*cos(twopi./(1+exp(-0.1*pStar(count+5)))-pi);
                         count = count+gaborRepeatParams;
                     end
-                    logA = (loglikelihood+logprior)-posteriorProb(ii);
+                    logA = (loglikelihood)-likelihood(ii);
         
                     if log(rand) < logA && logA < Inf
                         parameterVec(:,ii) = pStar;
-                        posteriorProb(ii) = loglikelihood+logprior;
+                        likelihood(ii) = loglikelihood;
                     end
                  
                     if mod(kk,250) == 0
@@ -574,7 +574,7 @@ for zz=1:totalUnits
 %                         pcaW = normc(pcaW);
 %                         eigenvals = diag(pcaW'*sigma*pcaW);
                         subplot(2,1,1);
-                        scatter(kk,posteriorProb(ii));hold on;
+                        scatter(kk,likelihood(ii));hold on;
                         subplot(2,1,2);
                         deviance = spikeTrain.*log(spikeTrain./mu)-(spikeTrain-mu);
                         deviance(isnan(deviance)) = mu(isnan(deviance));
@@ -593,11 +593,11 @@ for zz=1:totalUnits
         
             end
         end
-        indeces = find(posteriorProb~=Inf & posteriorProb ~= -Inf);
+        indeces = find(likelihood~=Inf & likelihood ~= -Inf);
         parameterVec = parameterVec(:,indeces);
-        posteriorProb = posteriorProb(indeces);
-        [maxPost,ind] = max(posteriorProb);
-        posteriorProb = maxPost;
+        likelihood = likelihood(indeces);
+        [maxlikely,ind] = max(likelihood);
+        posteriorProb = maxPost+logprior;
         parameterVec = parameterVec(:,ind);
         maxPost
         
@@ -827,7 +827,8 @@ for zz=1:totalUnits
             parameterVec(count+5,:) = twopi./(1+exp(-0.1.*parameterVec(count+5,:)))-pi;
             count = count+gaborRepeatParams;
         end
-        parameterVec(nonLinVec(2:3),:) = exp(parameterVec(nonLinVec(2:3),:));
+        parameterVec(nonLinVec(1),:) = exp(parameterVec(nonLinVec(1),:));
+        parameterVec(nonLinVec(2),:) = exp(parameterVec(nonLinVec(2),:))+2;
         parameterVec(precisionVec,:) = exp(parameterVec(precisionVec,:));
         parameterVec(sVec,:) = 1./(1+exp(-0.1.*parameterVec(sVec,:)));
 %         parameterVec(timeVec,:) = exp(parameterVec(timeVec,:));
