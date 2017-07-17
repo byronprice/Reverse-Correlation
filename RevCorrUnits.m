@@ -224,27 +224,27 @@ clearvars -except EphysFileName totalUnits numStimuli ...
     X Y totalMillisecs reducedMov movement;
 
 fullSize = DIM(1)*DIM(2);
-basisStdDevs = [200,300,400,450,500,550,600,650,700,750,1000];
+basisStdDevs = [250,500,750,1000,1250,1500,1750,2000,2500];
 numStdDevs = length(basisStdDevs);
 
 finalResultsPoissonB = cell(totalUnits,numStdDevs);
 finalResultsPoissonDev = cell(totalUnits,numStdDevs);
 finalResultsPoissonSE = cell(totalUnits,numStdDevs);
-finalResultsNormalB = cell(totalUnits,numStdDevs);
-finalResultsNormalDev = cell(totalUnits,numStdDevs);
-finalResultsNormalSE = cell(totalUnits,numStdDevs);
+temp = randperm(numStimuli);
+divide = round(0.7*numStimuli);
+train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
 for zz=1:totalUnits
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
-   spikeTrain = sum(spikeTrain(:,50:500),2);
-   movDesign = sum(reducedMov(:,50:500),2);
+   spikeTrain = sum(spikeTrain(:,50:300),2);
+   movDesign = sum(reducedMov(:,50:300),2);
    
    %    r = spikeTrain;
    %    fhat = unbiasedS\r;
    gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
        ((y-yc).*(y-yc))./(2*std*std));
    
-   center1 = xaxis(1:4:end);
-   center2 = yaxis(1:4:end);
+   center1 = xaxis(1:3:end);
+   center2 = yaxis(1:3:end);
    numBasis1 = length(center1);
    numBasis2 = length(center2);
    totalParams = numBasis1*numBasis2;
@@ -259,26 +259,25 @@ for zz=1:totalUnits
                count = count+1;
            end
        end
-       design = [movDesign,unbiasedS*basisFuns];
-       [bPoiss,devPoiss,statsPoiss] = glmfit(design,spikeTrain,'poisson');
+       design = [ones(numStimuli,1),unbiasedS*basisFuns];
+       [bPoiss,~,statsPoiss] = glmfit(design(train,:),spikeTrain(train),'poisson','constant','off');
        finalResultsPoissonB{zz,stddev} = bPoiss;
-       finalResultsPoissonDev{zz,stddev} = devPoiss;
        finalResultsPoissonSE{zz,stddev} = statsPoiss.se;
        
-       [b,dev,stats] = glmfit(design,spikeTrain);
-       finalResultsNormalB{zz,stddev} = b;
-       finalResultsNormalDev{zz,stddev} = dev;
-       finalResultsNormalSE{zz,stddev} = stats.se;
-       
-       clear bPoiss devPoiss statsPoiss b dev stats count design;
+       mu = exp(design(test,:)*bPoiss);
+       deviance = spikeTrain(test).*log(spikeTrain(test)./mu)-(spikeTrain(test)-mu);
+       deviance(isnan(deviance)) = mu(isnan(deviance));
+       devPoiss = 2.*sum(deviance);
+       finalResultsPoissonDev{zz,stddev} = devPoiss;
+       clear bPoiss devPoiss statsPoiss count design;
    end
    clear spikeTrain movDesign basisFuns center1 center2 numBasis1 numBasis2 totalParams;
 end
 
 fileName = strcat(EphysFileName(1:end-9),'-GLMResults.mat');
-save(fileName,'finalResultsNormalB','finalResultsPoissonB',...
-    'finalResultsNormalDev','finalResultsPoissonDev',...
-    'finalResultsNormalSE','finalResultsPoissonSE','allts','totalUnits',...
+save(fileName,'finalResultsPoissonB',...
+    'finalResultsPoissonDev',...
+    'finalResultsPoissonSE','allts','totalUnits',...
     'reducedSpikeCount','DIM','unbiasedS','movement',...
     'xaxis','yaxis','basisStdDevs','reducedMov');
 
