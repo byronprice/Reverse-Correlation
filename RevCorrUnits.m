@@ -42,7 +42,7 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %    
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/07/10
+% Updated: 2017/07/17
 % By: Byron Price
 
 % CREATE GIANT CONVOLUTION MATRIX TO TAKE DISCRETE
@@ -63,9 +63,6 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %   normalize the response by that background firing rate, though this may
 %   not add anything
 
-% assume we want the period from 50msec to 120msec after stimulus
-%  onset and that the calcium imaging recording started just in time 
-%  with the first stimulus (which was a grey screen)
 
 % read in the .plx file
 beta = 0;
@@ -221,65 +218,124 @@ end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement;
+    X Y totalMillisecs reducedMov movement svStrobed;
 
+% GLM with Gaussian basis functions
+% fullSize = DIM(1)*DIM(2);
+% basisStdDevs = [250,500,750,1000,1250,1500,1750,2000,2500];
+% numStdDevs = length(basisStdDevs);
+% 
+% finalResultsPoissonB = cell(totalUnits,numStdDevs);
+% finalResultsPoissonDev = cell(totalUnits,numStdDevs);
+% finalResultsPoissonSE = cell(totalUnits,numStdDevs);
+% temp = randperm(numStimuli);
+% divide = round(0.7*numStimuli);
+% train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
+% for zz=1:totalUnits
+%    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
+%    spikeTrain = sum(spikeTrain(:,50:300),2);
+%    movDesign = sum(reducedMov(:,50:300),2);
+%    
+%    %    r = spikeTrain;
+%    %    fhat = unbiasedS\r;
+%    gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
+%        ((y-yc).*(y-yc))./(2*std*std));
+%    
+%    center1 = xaxis(1:3:end);
+%    center2 = yaxis(1:3:end);
+%    numBasis1 = length(center1);
+%    numBasis2 = length(center2);
+%    totalParams = numBasis1*numBasis2;
+%    
+%    basisFuns = zeros(fullSize,totalParams);
+%    for stddev = 1:numStdDevs
+%        count = 1;
+%        for ii=1:numBasis1
+%            for jj=1:numBasis2
+%                temp = gaussFun(X,Y,center1(ii),center2(jj),basisStdDevs(stddev));
+%                basisFuns(:,count) = temp(:)./max(temp(:));
+%                count = count+1;
+%            end
+%        end
+%        design = [ones(numStimuli,1),unbiasedS*basisFuns];
+%        [bPoiss,~,statsPoiss] = glmfit(design(train,:),spikeTrain(train),'poisson','constant','off');
+%        finalResultsPoissonB{zz,stddev} = bPoiss;
+%        finalResultsPoissonSE{zz,stddev} = statsPoiss.se;
+%        
+%        mu = exp(design(test,:)*bPoiss);
+%        deviance = spikeTrain(test).*log(spikeTrain(test)./mu)-(spikeTrain(test)-mu);
+%        deviance(isnan(deviance)) = mu(isnan(deviance));
+%        devPoiss = 2.*sum(deviance);
+%        finalResultsPoissonDev{zz,stddev} = devPoiss;
+%        clear bPoiss devPoiss statsPoiss count design;
+%    end
+%    clear spikeTrain movDesign basisFuns center1 center2 numBasis1 numBasis2 totalParams;
+% end
+% 
+% fileName = strcat(EphysFileName(1:end-9),'-GLMResults.mat');
+% save(fileName,'finalResultsPoissonB',...
+%     'finalResultsPoissonDev',...
+%     'finalResultsPoissonSE','allts','totalUnits',...
+%     'reducedSpikeCount','DIM','unbiasedS','movement',...
+%     'xaxis','yaxis','basisStdDevs','reducedMov');
+
+% REGULARIZED PSEUDO-INVERSE SOLUTION
 fullSize = DIM(1)*DIM(2);
-basisStdDevs = [250,500,750,1000,1250,1500,1750,2000,2500];
-numStdDevs = length(basisStdDevs);
+L = zeros(fullSize,fullSize,'single');
 
-finalResultsPoissonB = cell(totalUnits,numStdDevs);
-finalResultsPoissonDev = cell(totalUnits,numStdDevs);
-finalResultsPoissonSE = cell(totalUnits,numStdDevs);
+%operator = [0,-1,0;-1,4,-1;0,-1,0];
+bigCount = 1;
+for jj=1:DIM(2)
+    for ii=1:DIM(1)
+        tempMat = zeros(DIM(1),DIM(2));
+        tempMat(ii,jj) = 4;
+        if ii > 1
+            tempMat(ii-1,jj) = -1;
+        end
+        if ii < DIM(1)
+            tempMat(ii+1,jj) = -1;
+        end
+        if jj > 1
+            tempMat(ii,jj-1) = -1;
+        end
+        if jj < DIM(2)
+            tempMat(ii,jj+1) = -1;
+        end
+        L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+    end
+end
+
 temp = randperm(numStimuli);
 divide = round(0.7*numStimuli);
 train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
+
+numLambda = 10;
+loglambda = logspace(3,6,numLambda);
+F = zeros(totalUnits,fullSize);
+bestLambda = zeros(totalUnits,1);
 for zz=1:totalUnits
+   fprintf('Running unit %d ...\n',zz);
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
    spikeTrain = sum(spikeTrain(:,50:300),2);
-   movDesign = sum(reducedMov(:,50:300),2);
+   r = [spikeTrain(train);zeros(fullSize,1)];
    
-   %    r = spikeTrain;
-   %    fhat = unbiasedS\r;
-   gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
-       ((y-yc).*(y-yc))./(2*std*std));
-   
-   center1 = xaxis(1:3:end);
-   center2 = yaxis(1:3:end);
-   numBasis1 = length(center1);
-   numBasis2 = length(center2);
-   totalParams = numBasis1*numBasis2;
-   
-   basisFuns = zeros(fullSize,totalParams);
-   for stddev = 1:numStdDevs
-       count = 1;
-       for ii=1:numBasis1
-           for jj=1:numBasis2
-               temp = gaussFun(X,Y,center1(ii),center2(jj),basisStdDevs(stddev));
-               basisFuns(:,count) = temp(:)./max(temp(:));
-               count = count+1;
-           end
-       end
-       design = [ones(numStimuli,1),unbiasedS*basisFuns];
-       [bPoiss,~,statsPoiss] = glmfit(design(train,:),spikeTrain(train),'poisson','constant','off');
-       finalResultsPoissonB{zz,stddev} = bPoiss;
-       finalResultsPoissonSE{zz,stddev} = statsPoiss.se;
-       
-       mu = exp(design(test,:)*bPoiss);
-       deviance = spikeTrain(test).*log(spikeTrain(test)./mu)-(spikeTrain(test)-mu);
-       deviance(isnan(deviance)) = mu(isnan(deviance));
-       devPoiss = 2.*sum(deviance);
-       finalResultsPoissonDev{zz,stddev} = devPoiss;
-       clear bPoiss devPoiss statsPoiss count design;
+   tempF = zeros(numLambda,fullSize);
+   RMS = zeros(numLambda,1);
+   for jj=1:numLambda
+      constraints = [unbiasedS(train,:);loglambda(jj).*L];
+      fhat = constraints\r;tempF(jj,:) = fhat;
+      RMS(jj) = norm(spikeTrain(test)-unbiasedS(test,:)*fhat);
    end
-   clear spikeTrain movDesign basisFuns center1 center2 numBasis1 numBasis2 totalParams;
+   [~,bestMap] = min(RMS);
+   F(zz,:) = tempF(bestMap,:);
+   bestLambda(zz) = loglambda(bestMap);
 end
 
-fileName = strcat(EphysFileName(1:end-9),'-GLMResults.mat');
-save(fileName,'finalResultsPoissonB',...
-    'finalResultsPoissonDev',...
-    'finalResultsPoissonSE','allts','totalUnits',...
+fileName = strcat(EphysFileName(1:end-9),'-PseudoInvResults.mat');
+save(fileName,'F','totalUnits','bestLambda',...
     'reducedSpikeCount','DIM','unbiasedS','movement',...
-    'xaxis','yaxis','basisStdDevs','reducedMov');
+    'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
+    'svStrobed');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
