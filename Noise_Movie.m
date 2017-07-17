@@ -88,7 +88,7 @@ flipInterval = 1/movie_FrameRate-deltaIFI;
 
 movieNums = random('Discrete Uniform',250,[numMoviesToDisplay,1]);
 
-usb.startRecording;usb.strobeEventWord(0);
+usb.startRecording;WaitSecs(1);usb.strobeEventWord(0);
 WaitSecs(30);
 usb.strobeEventWord(startEXP);WaitSecs(1);
 vbl = Screen('Flip',win);

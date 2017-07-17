@@ -146,7 +146,7 @@ ifi = Screen('GetFlipInterval', win);
 
 WaitTimes = WaitTime+unifrnd(0,1,[numStimuli,1]);
 
-usb.startRecording;usb.strobeEventWord(0);
+usb.startRecording;WaitSecs(1);usb.strobeEventWord(0);
 WaitSecs(30);
 usb.strobeEventWord(startEXP);WaitSecs(1);
 tt = 1;
