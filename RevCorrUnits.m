@@ -323,7 +323,7 @@ for zz=1:totalUnits
    RMS = zeros(numLambda,1);
    for jj=1:numLambda
       constraints = [unbiasedS(train,:);loglambda(jj).*L];
-      fhat = constraints\r;tempF(jj,:) = fhat;
+      fhat = double(constraints)\r;tempF(jj,:) = fhat;
       RMS(jj) = norm(spikeTrain(test)-unbiasedS(test,:)*fhat);
    end
    [~,bestMap] = min(RMS);
