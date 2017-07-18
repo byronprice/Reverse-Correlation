@@ -42,7 +42,7 @@ elseif size(effectivePixels,2) == 2
     DIM(1) = effectivePixels(2);
     DIM(2) = effectivePixels(1);
 end
-    
+   
 xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
     round(screenPix_to_effPix*DIM(2)/2),DIM(2));
 yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
@@ -340,7 +340,7 @@ for zz=1:totalUnits
         designPrior(designVec,:) = [b(1),1];
         
         %MCMC intialization
-        numStarts = 10;
+        numStarts = 5e4;
         parameterVec = zeros(numParameters,numStarts);
         likelihood = zeros(numStarts,1);
         
@@ -473,7 +473,7 @@ for zz=1:totalUnits
             loglambda = log(2.38*2.38).*ones(numParameters,1);
             eigenvals = variances;
             figure();
-            for kk=1:2e4
+            for kk=1:50
                 
                 index = unidrnd(numParameters-precisionParams);%unidrnd(numParameters);
                 lambda = loglambda(index);

@@ -281,7 +281,7 @@ clearvars -except EphysFileName totalUnits numStimuli ...
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
 fullSize = DIM(1)*DIM(2);
-L = sparse(fullSize,fullSize);
+L = sparse(fullSize,fullSize+1);
 
 %operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
@@ -301,41 +301,55 @@ for jj=1:DIM(2)
         if jj < DIM(2)
             tempMat(ii,jj+1) = -1;
         end
-        L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+        L(bigCount,2:end) = tempMat(:)';bigCount = bigCount+1;
     end
 end
 
-temp = randperm(numStimuli);
-divide = round(0.7*numStimuli);
-train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
-
 numLambda = 10;
 loglambda = logspace(3,6,numLambda);
-F = zeros(totalUnits,fullSize);
+F = zeros(totalUnits,fullSize+1);
 bestLambda = zeros(totalUnits,1);
+deviance = zeros(totalUnits,5);
 for zz=1:totalUnits
    fprintf('Running unit %d ...\n',zz);
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
+   
+   temp = randperm(numStimuli);
+   divide = round(0.7*numStimuli);
+   train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
+   
    spikeTrain = sum(spikeTrain(:,50:300),2);
    r = [spikeTrain(train);sparse(fullSize,1)];
    
-   tempF = zeros(numLambda,fullSize);
-   RMS = zeros(numLambda,1);
+   tempF = zeros(numLambda,fullSize+1);
+   tempDev = zeros(numLambda,4);
+   allOnesTrain = ones(length(train),1);
+   allOnesTest = ones(length(test),1);
    for jj=1:numLambda
-      constraints = [unbiasedS(train,:);loglambda(jj).*L];
+      constraints = [[allOnesTrain,unbiasedS(train,:)];loglambda(jj).*L];
       fhat = constraints\r;tempF(jj,:) = fhat;
-      RMS(jj) = norm(spikeTrain(test)-unbiasedS(test,:)*fhat);
+      tempDev(jj,1) = sum((spikeTrain(test)-[allOnesTest,unbiasedS(test,:)]*fhat).^2);
+      rf = reshape(fhat(2:end),[DIM(1),DIM(2)]);
+      for kk=2:4
+        rf = imrotate(rf,90);
+        tempfhat = [fhat(1);rf(:)];
+        tempDev(jj,kk) = sum((spikeTrain(test)-[allOnesTest,unbiasedS(test,:)]*tempfhat).^2);
+      end
    end
-   [~,bestMap] = min(RMS);
+   [~,bestMap] = min(tempDev(:,1));
    F(zz,:) = tempF(bestMap,:);
    bestLambda(zz) = loglambda(bestMap);
+   deviance(zz,1:4) = tempDev(bestMap,:);
+   
+   f = allOnesTrain\spikeTrain(train);
+   deviance(zz,5) = sum((spikeTrain(test)-allOnesTest*f).^2);
 end
 
 fileName = strcat(EphysFileName(1:end-9),'-PseudoInvResults.mat');
 save(fileName,'F','totalUnits','bestLambda',...
     'reducedSpikeCount','DIM','unbiasedS','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
-    'svStrobed');
+    'svStrobed','deviance','numStimuli');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
