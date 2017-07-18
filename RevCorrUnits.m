@@ -281,7 +281,7 @@ clearvars -except EphysFileName totalUnits numStimuli ...
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION
 fullSize = DIM(1)*DIM(2);
-L = zeros(fullSize,fullSize,'single');
+L = sparse(fullSize,fullSize);
 
 %operator = [0,-1,0;-1,4,-1;0,-1,0];
 bigCount = 1;
@@ -317,13 +317,13 @@ for zz=1:totalUnits
    fprintf('Running unit %d ...\n',zz);
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
    spikeTrain = sum(spikeTrain(:,50:300),2);
-   r = [spikeTrain(train);zeros(fullSize,1)];
+   r = [spikeTrain(train);sparse(fullSize,1)];
    
    tempF = zeros(numLambda,fullSize);
    RMS = zeros(numLambda,1);
    for jj=1:numLambda
       constraints = [unbiasedS(train,:);loglambda(jj).*L];
-      fhat = double(constraints)\r;tempF(jj,:) = fhat;
+      fhat = constraints\r;tempF(jj,:) = fhat;
       RMS(jj) = norm(spikeTrain(test)-unbiasedS(test,:)*fhat);
    end
    [~,bestMap] = min(RMS);
