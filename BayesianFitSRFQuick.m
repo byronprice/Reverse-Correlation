@@ -58,17 +58,20 @@ v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
 [V,U] = meshgrid(v,u);
 S_f = (U.^2+V.^2).^(beta/2);
 
-S_f(S_f==inf) = 1;
+S_f(S_f==inf) = 0;
+S_f = 1./S_f;
+S_f(S_f==inf) = 0;
+S_f = sqrt(S_f);
 a = 0;b = 255;
 unbiasedS = zeros(size(S));
 for ii=1:numStimuli
-    temp = reshape(real(ifftn(fftn(double(reshape(S(ii,:),[DIM(1),DIM(2)])))./S_f)),[DIM(1)*DIM(2),1])';
+    temp = reshape(real(ifftn(fftn(double(reshape(S(ii,:),[DIM(1),DIM(2)]))).*S_f)),[DIM(1)*DIM(2),1])';
     currentMin = min(temp);currentMax = max(temp);
     temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
     unbiasedS(ii,:) = temp;
 end
 
-clear S S_f U V u v;
+clear S U V u v;
 
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
