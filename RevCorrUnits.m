@@ -128,7 +128,7 @@ if strcmp(NoiseType,'pinkHC') == 1
    unbiasedS(unbiasedS>=196) = 255;
 end
 
-clear S S_f U V u v;
+clear U V u v;
 
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
@@ -218,7 +218,7 @@ end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement svStrobed;
+    X Y totalMillisecs reducedMov movement svStrobed S S_f;
 
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
@@ -305,8 +305,8 @@ for jj=1:DIM(2)
     end
 end
 
-numLambda = 10;
-loglambda = logspace(3,6,numLambda);
+numLambda = 20;
+loglambda = logspace(1,6,numLambda);
 F = zeros(totalUnits,fullSize+1);
 bestLambda = zeros(totalUnits,1);
 deviance = zeros(totalUnits,5);
@@ -315,7 +315,7 @@ for zz=1:totalUnits
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
    
    temp = randperm(numStimuli);
-   divide = round(0.7*numStimuli);
+   divide = round(0.75*numStimuli);
    train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
    
    spikeTrain = sum(spikeTrain(:,50:300),2);
@@ -328,12 +328,12 @@ for zz=1:totalUnits
    for jj=1:numLambda
       constraints = [[allOnesTrain,unbiasedS(train,:)];loglambda(jj).*L];
       fhat = constraints\r;tempF(jj,:) = fhat;
-      tempDev(jj,1) = sum((spikeTrain(test)-[allOnesTest,unbiasedS(test,:)]*fhat).^2);
-      rf = reshape(fhat(2:end),[DIM(1),DIM(2)]);
+      tempDev(jj,1) = sum((spikeTrain(test)-[allOnesTest,S(test,:)]*fhat).^2);
+      rf = reshape(full(fhat(2:end)),[DIM(1),DIM(2)]);
       for kk=2:4
         rf = imrotate(rf,90);
         tempfhat = [fhat(1);rf(:)];
-        tempDev(jj,kk) = sum((spikeTrain(test)-[allOnesTest,unbiasedS(test,:)]*tempfhat).^2);
+        tempDev(jj,kk) = sum((spikeTrain(test)-[allOnesTest,S(test,:)]*tempfhat).^2);
       end
    end
    [~,bestMap] = min(tempDev(:,1));
@@ -349,7 +349,7 @@ fileName = strcat(EphysFileName(1:end-9),'-PseudoInvResults.mat');
 save(fileName,'F','totalUnits','bestLambda',...
     'reducedSpikeCount','DIM','unbiasedS','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
-    'svStrobed','deviance','numStimuli');
+    'svStrobed','deviance','numStimuli','S_f');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
