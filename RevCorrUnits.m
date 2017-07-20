@@ -321,7 +321,6 @@ for zz=1:totalUnits
    tempF = zeros(numLambda,fullSize);
    tempSigmoid = zeros(numLambda,4);
    tempDev = zeros(numLambda,4);
-   tempExplainVar = zeros(numLambda,1);
 %    allOnesTrain = ones(length(train),1);
 %    allOnesTest = ones(length(test),1);
    for jj=1:numLambda
@@ -354,9 +353,6 @@ for zz=1:totalUnits
       initialDev(isnan(initialDev) | isinf(initialDev)) = temp(isnan(initialDev) | isinf(initialDev));
       tempDev(jj,1) = 2*sum(initialDev);
       
-      % calculate held-out explained variance
-      rr = corrcoef(temp,spikeTrain(test));
-      tempExplainVar(jj,1) = rr(2,1)^2;
       
       % rotate the receptive field and recalculate the held-out deviance
       rf = reshape(fhat,[DIM(1),DIM(2)]);
@@ -377,10 +373,17 @@ for zz=1:totalUnits
    bestLambda(zz) = loglambda(bestMap);
    heldOutDeviance(zz,1:4) = tempDev(bestMap,:);
    sigmoidNonlin(zz,:) = tempSigmoid(bestMap,:);
-   heldOutExplainedVariance(zz,1) = tempExplainVar(bestMap);
    
-   f = ones(length(train),1)\spikeTrain(train);
-   heldOutDeviance(zz,5) = sum((spikeTrain(test)-allOnesTest*f).^2);
+   % get held-out deviance of model with single regressor
+   [~,dev,~] = glmfit(ones(length(test),1),spikeTrain(test),'poisson','constant','off');
+   heldOutDeviance(zz,5) = dev;
+   
+   % get held-out explained variance
+   %  see R-squared measures for Count Data Regression Models
+   %   A. Colin Cameron & Frank A.G. Windmeijer April 1995
+   %   Journal of Business and Economic Statistics
+   heldOutExplainedVariance(zz,1) = 1-tempDev(bestMap,1)/dev;
+   fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
 end
 
 % save the results
