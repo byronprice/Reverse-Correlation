@@ -1,5 +1,8 @@
-function [] = RevCorrUnits(AnimalName,Date,NoiseType)
-%RevCorrUnits.m
+function [] = RevCorrUnitsDual(AnimalName,Date,NoiseType)
+%RevCorrUnitsDual.m
+%   Same as RevCorrUnits, but will try to rethink how the linear receptive
+%    field is calculated by having two receptive fields, which represent
+%    light and dark being presented
 %   %   Analysis of single unit recording data in response to a series of white
 %   or pink noise stimuli (see Noise_RevCorr.m for Psychtoolbox
 %   stimulus)
@@ -106,12 +109,24 @@ S_f = 1./S_f;
 S_f(S_f==inf) = 0;
 S_f = sqrt(S_f);
 a = 0;b = 255;
-unbiasedS = zeros(size(S));
+
+[~,numPixels] = size(S);
+unbiasedS = zeros(numStimuli,numPixels*2);
+revisedS = zeros(numStimuli,numPixels*2);
 for ii=1:numStimuli
     temp = reshape(real(ifftn(fftn(double(reshape(S(ii,:),[DIM(1),DIM(2)]))).*S_f)),[DIM(1)*DIM(2),1])';
     currentMin = min(temp);currentMax = max(temp);
     temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
-    unbiasedS(ii,:) = temp;
+    
+    light = max(temp,127)-127; % how much brightness
+    dark = max(255-temp,127)-127; % how much darkness
+    unbiasedS(ii,1:numPixels) = light;
+    unbiasedS(ii,numPixels+1:end) = dark;
+    
+    light = max(S(ii,:),127)-127;
+    dark = max(255-S(ii,:),127)-127;
+    revisedS(ii,1:numPixels) = light;
+    revisedS(ii,numPixels+1:end) = dark;
 end
 
 if strcmp(NoiseType,'pinkHC') == 1
@@ -119,7 +134,7 @@ if strcmp(NoiseType,'pinkHC') == 1
    unbiasedS(unbiasedS>=196) = 255;
 end
 
-clear U V u v;
+clear U V u v S;
 
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
@@ -209,7 +224,7 @@ end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement svStrobed S S_f;
+    X Y totalMillisecs reducedMov movement svStrobed revisedS S_f;
 
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
@@ -408,70 +423,3 @@ save(fileName,'F','totalUnits','bestLambda',...
 % Img = kron(double(Img),ones(screenPix_to_effPix));
 
 end
-
-% SIMULATE DATA and test algorithm
-% numStimuli = 5000;
-% N = 48;
-% newS = randn([numStimuli,N*N]);
-% gaborFilter = @(x,y) exp(-x.^2./(2*3*3)-y.^2./(2*3*3)).*sin(2*pi*0.05.*(x.*cos(pi/4)+y.*sin(pi/4)));
-% gaussFilter = @(x,y) exp(-x.^2./(2*3*3)-y.^2./(2*3*3));
-% x = linspace(-20,20,N);y = linspace(-20,20,N);
-% [X,Y] = meshgrid(x,y);
-% gabor = gaborFilter(X,Y);
-% gauss = gaussFilter(X,Y);
-% r = zeros(numStimuli,1);
-% for ii=1:numStimuli
-%     temp = newS(ii,:);
-%     temp = temp-min(temp);temp = (temp./max(temp)).*255;
-%     temp = temp-(mean(temp)-127);
-%     newS(ii,:) = temp-127;
-%     tempIm = reshape(temp,[N,N]);
-%     gaussOutput = 1;%sum(sum(conv2(tempIm,gauss)));
-%     gaborOutput = sum(newS(ii,:)'.*gabor(:));
-%     lambda = exp((gaborOutput/gaussOutput)./(N*N));
-%     r(ii) = poissrnd(lambda);
-% end
-% 
-% L = zeros(N*N,N*N,'single');
-% 
-% %operator = [0,-1,0;-1,4,-1;0,-1,0];
-% bigCount = 1;
-% for jj=1:N
-%     for ii=1:N
-%         tempMat = zeros(N,N);
-%         tempMat(ii,jj) = 4;
-%         if ii > 1
-%             tempMat(ii-1,jj) = -1;
-%         end
-%         if ii < N
-%             tempMat(ii+1,jj) = -1;
-%         end
-%         if jj > 1
-%             tempMat(ii,jj-1) = -1;
-%         end
-%         if jj < N
-%             tempMat(ii,jj+1) = -1;
-%         end
-%         L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
-%     end
-% end
-% bigLambda = [0,5e1,1e2,1e3,1e4,5e4,1e5,1e6,1e7,1e8];
-% RMS = zeros(length(bigLambda),1);
-% parfor ii=1:length(bigLambda)
-%     A = [newS;bigLambda(ii).*L];
-%     constraints = [r;zeros(N*N,1)];
-%     fhat = pinv(A)*constraints;
-%     RMS(ii) = (N*N)^(-0.5)*norm(r-newS*fhat);
-% end
-% rmsDiff = diff(RMS);lambdaDiff = diff(bigLambda)';
-% deltaRMSdeltaLambda = rmsDiff./lambdaDiff;
-% [maxVal,index] = max(abs(deltaRMSdeltaLambda));
-% onepercent = 0.01*maxVal;
-% firstBelow = find(abs(deltaRMSdeltaLambda(index:end))<onepercent,1);
-% bestMap = index+firstBelow-1;
-% 
-% A = [newS;bigLambda(bestMap).*L];
-% fhat = pinv(A)*constraints;
-% figure();subplot(2,1,1);imagesc(gabor);
-% subplot(2,1,2);imagesc(reshape(fhat,[N,N]));
-% title(sprintf('Lambda: %3.0e',bigLambda(bestMap)));
