@@ -353,6 +353,8 @@ for zz=1:totalUnits
       initialDev(isnan(initialDev) | isinf(initialDev)) = temp(isnan(initialDev) | isinf(initialDev));
       tempDev(jj,1) = 2*sum(initialDev);
       
+      rr = corrcoef(temp,spikeTrain(test));
+      fprintf('Variance Explained Correlation: %3.2f\n',rr(1,2)^2);
       
       % rotate the receptive field and recalculate the held-out deviance
       rf = reshape(fhat,[DIM(1),DIM(2)]);
