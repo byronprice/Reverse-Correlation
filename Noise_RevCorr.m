@@ -85,7 +85,7 @@ Screen('LoadNormalizedGammaTable',win,gammaTable);
 % Query window size in pixels
 [w_pixels,h_pixels] = Screen('WindowSize', win);
 minPix = min(w_pixels,h_pixels);
-maxPix = max(w_pixels,h_pixels)-200;
+maxPix = max(w_pixels,h_pixels)-150;
 
 % screen size in millimeters and a conversion factor to get from mm to pixels
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
@@ -155,7 +155,7 @@ while tt <= numStimuli
     if tcpipClient.BytesAvailable > 0
         data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
         if sum(data) > 0
-            WaitSecs(5);
+            WaitSecs(4);
         else
             % Convert it to a texture 'tex':
             Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
