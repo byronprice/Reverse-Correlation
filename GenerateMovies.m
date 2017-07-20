@@ -37,7 +37,9 @@ for jj=1:100
     X = real(X);
     
     % get unbiased movie
-    S_f(S_f==0) = 1;
+    S_f = 1./S_f;
+    S_f(S_f==inf) = 0;
+    S_f = sqrt(S_f);
     
     desiredMin = 0;
     desiredMax = 255;
@@ -52,8 +54,8 @@ for jj=1:100
     end
     
     S = uint8(X);
-    unbiasedS = real(ifftn(fftn(double(S))./S_f));
-    clear X Y S_f;
+    unbiasedS = real(ifftn(fftn(double(S)).*S_f));
+    clear X Y;
     S = S(1:DIM(1),1:DIM(2),1:numStimuli);
     temp = unbiasedS(1:DIM(1),1:DIM(2),1:numStimuli);
     
@@ -69,7 +71,7 @@ for jj=1:100
     
     fileName = sprintf('10Sec_UnbiasedPinkNoiseMovie%d.mat',jj);
     save(fileName,'unbiasedS','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
-        'movieTime_Seconds','mmPerPixel','DIM');
+        'movieTime_Seconds','mmPerPixel','DIM','S_f');
     
 end
 % from Dong 2001 ... Spatiotemporal Inseparability of Natural Images and
