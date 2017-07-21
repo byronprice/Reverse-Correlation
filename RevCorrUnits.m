@@ -108,7 +108,7 @@ S_f = sqrt(S_f);
 a = 0;b = 255;
 unbiasedS = zeros(size(S));
 for ii=1:numStimuli
-    temp = reshape(real(ifftn(fftn(double(reshape(S(ii,:),[DIM(1),DIM(2)]))).*S_f)),[DIM(1)*DIM(2),1])';
+    temp = reshape(real(ifft2(fft2(double(reshape(S(ii,:),[DIM(1),DIM(2)]))).*S_f)),[DIM(1)*DIM(2),1])';
     currentMin = min(temp);currentMax = max(temp);
     temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
     unbiasedS(ii,:) = temp;
@@ -297,9 +297,15 @@ for jj=1:DIM(2)
     end
 end
 
+matrix = zeros(DIM(1),DIM(2));
+matrix(1,:) = 1;matrix(end,:) = 1;matrix(:,1) = 1;matrix(:,end) = 1;
+edgeInds = matrix(:)==1;
+
+fullSizeRevised = sum(~edgeInds);
+
 numLambda = 20;
 loglambda = logspace(3,7,numLambda);
-F = zeros(totalUnits,fullSize);
+F = zeros(totalUnits,fullSizeRevised);
 bestLambda = zeros(totalUnits,1);
 heldOutDeviance = zeros(totalUnits,5);
 heldOutExplainedVariance = zeros(totalUnits,1);
@@ -318,7 +324,7 @@ for zz=1:totalUnits
    
    r = [spikeTrain(train);sparse(fullSize,1)];
    
-   tempF = zeros(numLambda,fullSize);
+   tempF = zeros(numLambda,fullSizeRevised);
    tempSigmoid = zeros(numLambda,4);
    tempDev = zeros(numLambda,4);
 %    allOnesTrain = ones(length(train),1);
@@ -330,11 +336,11 @@ for zz=1:totalUnits
       
       % remove bias created by using pink noise
       temp = reshape(fhat,[DIM(1),DIM(2)]);
-      temp = real(ifft2(fft2(full(temp)).*S_f));
-      fhat = temp(:);
+      temp = real(ifft2(fft2(temp).*S_f));
+      fhat = temp(:);fhat = fhat(~edgeInds);
       
       % fit sigmoid nonlinearity
-      result = S(train,:)*fhat;
+      result = S(train,~edgeInds)*fhat;
       myFun = @(x) x(1)./(1+exp(-(result-x(2)).*x(3)))+x(4)-spikeTrain(train);
       x0 = [5,0.5,10,baseRate];
       lb = [0,0,0,0];ub = [5e2,Inf,Inf,Inf];
@@ -346,22 +352,19 @@ for zz=1:totalUnits
       tempSigmoid(jj,:) = sigmoidParams;
       
       % calculate held-out Poisson deviance
-      temp = S(test,:)*fhat;
+      temp = S(test,~edgeInds)*fhat;
       temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
       
       initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
       initialDev(isnan(initialDev) | isinf(initialDev)) = temp(isnan(initialDev) | isinf(initialDev));
       tempDev(jj,1) = 2*sum(initialDev);
       
-      rr = corrcoef(temp,spikeTrain(test));
-      fprintf('Variance Explained Correlation: %3.2f\n',rr(1,2)^2);
-      
       % rotate the receptive field and recalculate the held-out deviance
-      rf = reshape(fhat,[DIM(1),DIM(2)]);
+      rf = reshape(fhat,[DIM(1)-2,DIM(2)-2]);
       for kk=2:4
         rf = imrotate(rf,90);
         tempfhat = rf(:);
-        temp = S(test,:)*tempfhat;
+        temp = S(test,~edgeInds)*tempfhat;
         temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
         
         initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
