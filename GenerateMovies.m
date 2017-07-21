@@ -5,11 +5,11 @@ for jj=1:100
     movie_FrameRate = 60; % hz
     movieTime_Seconds = 10;
     numStimuli = movieTime_Seconds*movie_FrameRate;
-    maxPix = 2360;
+    maxPix = 2410;
     minPix = 1440;
     mmPerPixel = 0.2363;
     
-    screenPix_to_effPix = 12;
+    screenPix_to_effPix = 20;
     maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
     minPix = minPix-mod(minPix,screenPix_to_effPix);
     effectivePixels = [minPix/screenPix_to_effPix,maxPix/screenPix_to_effPix];
@@ -65,11 +65,11 @@ for jj=1:100
     
     unbiasedS = uint8(temp);
     
-    fileName = sprintf('10Sec_PinkNoiseMovie%d.mat',jj);
+    fileName = sprintf('12Sec_PinkNoiseMovie%d.mat',jj);
     save(fileName,'S','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
         'mmPerPixel','numStimuli','movieTime_Seconds','DIM');
     
-    fileName = sprintf('10Sec_UnbiasedPinkNoiseMovie%d.mat',jj);
+    fileName = sprintf('12Sec_UnbiasedPinkNoiseMovie%d.mat',jj);
     save(fileName,'unbiasedS','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
         'movieTime_Seconds','mmPerPixel','DIM','S_f');
     
