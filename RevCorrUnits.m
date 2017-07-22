@@ -297,6 +297,8 @@ for jj=1:DIM(2)
     end
 end
 
+warning('off','all');
+
 matrix = zeros(DIM(1),DIM(2));
 matrix(1,:) = 1;matrix(end,:) = 1;matrix(:,1) = 1;matrix(:,end) = 1;
 edgeInds = matrix(:)==1;
@@ -346,6 +348,11 @@ for zz=1:totalUnits
       lb = [0,0,0,0];ub = [5e2,Inf,Inf,Inf];
 %       options.Algorithm = 'levenberg-marquardt';
       sigmoidParams = lsqnonlin(myFun,x0,lb,ub);
+      
+      temp = sigmoidParams(1)./(1+exp(-(result-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
+      initialDev = spikeTrain(train).*log(spikeTrain(train)./temp)-(spikeTrain(train)-temp);
+      initialDev(isnan(initialDev) | isinf(initialDev)) = temp(isnan(initialDev) | isinf(initialDev));
+      sigmoidParams = FitSigmoid(sigmoidParams,2*sum(initialDev),spikeTrain(train),result);
       
       % save parameters
       tempF(jj,:) = fhat;
@@ -414,6 +421,53 @@ save(fileName,'F','totalUnits','bestLambda',...
 % end
 % Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
 % Img = kron(double(Img),ones(screenPix_to_effPix));
+
+end
+
+function [sigmoidParams] = FitSigmoid(sigmoidParams,initialDev,spikeTrain,result)
+N = 1e5;
+numParams = length(sigmoidParams);
+paramVec = zeros(numParams,N);
+devVec = zeros(N,1);
+
+variance = 0.01;
+
+paramVec(:,1) = sigmoidParams';
+devVec(1) = initialDev;
+
+W = diag(ones(numParams,1));
+loglambda = log(2.38^2)*ones(numParams,1);
+optimalAccept = 0.44;
+for ii=2:N
+    index = random('Discrete Uniform',numParams);
+    
+    pStar = paramVec(:,ii-1)+W(:,index).*normrnd(0,sqrt(exp(loglambda(index))*variance));
+    
+    if sum(pStar<=0) == 0
+        temp = pStar(1)./(1+exp(-(result-pStar(2)).*pStar(3)))+pStar(4);
+        
+        pDev = spikeTrain.*log(spikeTrain./temp)-(spikeTrain-temp);
+        pDev(isnan(pDev) | isinf(pDev)) = temp(isnan(pDev) | isinf(pDev));
+        
+        logA = devVec(ii-1) - 2*sum(pDev);
+        if log(rand) < logA
+           paramVec(:,ii) = pStar;
+           devVec(ii) = 2*sum(pDev);
+        else
+            paramVec(:,ii) = paramVec(:,ii-1);
+            devVec(ii) = devVec(ii-1);
+            
+        end
+        loglambda(index) = loglambda(index)+0.01*(exp(min(0,logA))-optimalAccept);
+    else
+       loglambda(index) = loglambda(index)+0.01*(-optimalAccept);
+       paramVec(:,ii) = paramVec(:,ii-1);
+       devVec(ii) = devVec(ii-1);      
+    end
+end
+
+[~,ind] = min(devVec);
+sigmoidParams = paramVec(:,ind);
 
 end
 
