@@ -104,7 +104,6 @@ S_f = (U.^2+V.^2).^(beta/2);
 S_f(S_f==inf) = 0;
 S_f = 1./S_f;
 S_f(S_f==inf) = 0;
-S_f = sqrt(S_f);
 a = 0;b = 255;
 unbiasedS = zeros(size(S));
 for ii=1:numStimuli

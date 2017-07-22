@@ -1,7 +1,7 @@
 % GenerateMovies.m
 
 for jj=1:100
-    beta = -3;spaceExp = 2;timeExp = 2;
+    beta = -2;spaceExp = 2;timeExp = 2;
     movie_FrameRate = 60; % hz
     movieTime_Seconds = 10;
     numStimuli = movieTime_Seconds*movie_FrameRate;
@@ -32,14 +32,13 @@ for jj=1:100
     S_f(S_f==inf) = 0;
     % S_f = S_f.^0.5;
     phi = rand([DIM(1)*2,DIM(2)*2,DIM(3)*2]);
-    tempFFT = S_f.^0.5.*(cos(2*pi*phi)+1i*sin(2*pi*phi));
+    tempFFT = S_f.*(cos(2*pi*phi)+1i*sin(2*pi*phi));
     X = ifftn(tempFFT);
     X = real(X);
     
     % get unbiased movie
     S_f = 1./S_f;
     S_f(S_f==inf) = 0;
-    S_f = sqrt(S_f);
     
     desiredMin = 0;
     desiredMax = 255;
@@ -56,8 +55,17 @@ for jj=1:100
     S = uint8(X);
     unbiasedS = real(ifftn(fftn(double(S)).*S_f));
     clear X Y;
-    S = S(1:DIM(1),1:DIM(2),1:numStimuli);
-    temp = unbiasedS(1:DIM(1),1:DIM(2),1:numStimuli);
+    
+    if mod(ii,3) == 0
+        S = S(1:DIM(1),1:DIM(2),1:numStimuli);
+        temp = unbiasedS(1:DIM(1),1:DIM(2),1:numStimuli);
+    elseif mod(ii,3) == 1
+        S = S(50:50+DIM(1)-1,50:50+DIM(2)-1,250:250+numStimuli-1);
+        temp = unbiasedS(50:50+DIM(1)-1,50:50+DIM(2)-1,250:250+numStimuli-1);
+    else
+       S = S(DIM(1)+1:end,DIM(2)+1:end,numStimuli+1:end);
+       temp = unbiasedS(DIM(1)+1:end,DIM(2)+1:end,numStimuli+1:end);
+    end
     
     a = 0;b = 255;
     currentMin = min(temp(:));currentMax = max(temp(:));

@@ -106,10 +106,10 @@ if strcmp(NoiseType,'white') == 1
     beta = 0;
 %     spaceExp = 2;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -2;
+    beta = -1.5;
 %     spaceExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
-    beta = -4;
+    beta = -2;
 %     spaceExp = 2;
 else 
     display('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.')
