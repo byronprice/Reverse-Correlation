@@ -1,11 +1,11 @@
 % GenerateMovies.m
 
-for jj=1:100
+for jj=1:250
     beta = -2;spaceExp = 2;timeExp = 2;
     movie_FrameRate = 60; % hz
     movieTime_Seconds = 10;
     numStimuli = movieTime_Seconds*movie_FrameRate;
-    maxPix = 2410;
+    maxPix = 2360;
     minPix = 1440;
     mmPerPixel = 0.2363;
     
@@ -73,11 +73,11 @@ for jj=1:100
     
     unbiasedS = uint8(temp);
     
-    fileName = sprintf('12Sec_PinkNoiseMovie%d.mat',jj);
+    fileName = sprintf('11Sec_PinkNoiseMovie%d.mat',jj);
     save(fileName,'S','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
         'mmPerPixel','numStimuli','movieTime_Seconds','DIM');
     
-    fileName = sprintf('12Sec_UnbiasedPinkNoiseMovie%d.mat',jj);
+    fileName = sprintf('11Sec_UnbiasedPinkNoiseMovie%d.mat',jj);
     save(fileName,'unbiasedS','screenPix_to_effPix','maxPix','minPix','beta','movie_FrameRate',...
         'movieTime_Seconds','mmPerPixel','DIM','S_f');
     
