@@ -98,6 +98,7 @@ while count<=numMoviesToDisplay
         data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
         if sum(data) > 0
             WaitSecs(4);
+            fprintf('Motion Pause ...\n');
         else
             index = movieNums(count);
             load(sprintf('11Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
