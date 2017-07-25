@@ -120,6 +120,16 @@ end
 
 clear U V u v;
 
+% DIVIDE DATA INTO TEST AND TRAIN
+if exist('test','var') == 1 && exist('train','var') == 1
+    fprintf('Natural Images as test set.\n');
+else
+    % divide data into training and test
+   temp = randperm(numStimuli);
+   divide = round(0.75*numStimuli);
+   train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
+end
+
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
@@ -208,7 +218,7 @@ end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement svStrobed S S_f;
+    X Y totalMillisecs reducedMov movement svStrobed S S_f test train;
 
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
@@ -314,11 +324,6 @@ sigmoidNonlin = zeros(totalUnits,4);
 for zz=1:totalUnits
    fprintf('Running unit %d ...\n',zz);
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
-   
-   % divide data into training and test
-   temp = randperm(numStimuli);
-   divide = round(0.7*numStimuli);
-   train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
    
    baseRate = sum(sum(spikeTrain(:,51:400)))./(numStimuli*0.35);
    spikeTrain = sum(spikeTrain(:,50:300),2);
