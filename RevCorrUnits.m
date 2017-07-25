@@ -122,7 +122,7 @@ clear U V u v;
 
 % DIVIDE DATA INTO TEST AND TRAIN
 if exist('test','var') == 1 && exist('train','var') == 1
-    fprintf('Natural Images as test set.\n');
+    fprintf('Natural images as test set.\n');
 else
     % divide data into training and test
    temp = randperm(numStimuli);
