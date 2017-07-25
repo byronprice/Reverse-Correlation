@@ -424,7 +424,7 @@ save(fileName,'F','totalUnits','bestLambda',...
 end
 
 function [sigmoidParams] = FitSigmoid(sigmoidParams,initialDev,spikeTrain,result)
-N = 1e5;
+N = 5e4;
 numParams = length(sigmoidParams);
 paramVec = zeros(numParams,N);
 devVec = zeros(N,1);
