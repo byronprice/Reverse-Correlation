@@ -97,7 +97,7 @@ while count<=numMoviesToDisplay
     if tcpipClient.BytesAvailable > 0
         data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
         if sum(data) > 0
-            WaitSecs(4);
+            WaitSecs(5);
             fprintf('Motion Pause ...\n');
         else
             index = movieNums(count);
