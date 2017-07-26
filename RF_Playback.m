@@ -138,7 +138,7 @@ while tt <= numStimuli
     if tcpipClient.BytesAvailable > 0
         data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
         if sum(data) > 0
-            WaitSecs(4);
+            WaitSecs(2);
         else
             % Convert it to a texture 'tex':
             Img = reshape(S(tt,:),[DIM(1),DIM(2)]);
