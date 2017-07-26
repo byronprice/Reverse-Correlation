@@ -104,10 +104,10 @@ if strcmp(NoiseType,'white') == 1
     beta = 0;
 %     spaceExp = 2;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -1.5;
+    beta = -2;
 %     spaceExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
-    beta = -2;
+    beta = -2.5;
 %     spaceExp = 2;
 else 
     display('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.')
@@ -136,13 +136,13 @@ shuffled = randperm(numStimuli);
 test = shuffled(1:350);
 train = shuffled(350+1:end);
 
-load('NaturalImageSet.mat');
-numNaturalImages = size(NaturalImSet,1);
-for ii=1:length(test)
-   index = random('Discrete Uniform',numNaturalImages);
-   temp = NaturalImSet{index};
-   S(test(ii),:) = temp(:);
-end
+% load('NaturalImageSet.mat');
+% numNaturalImages = size(NaturalImSet,1);
+% for ii=1:length(test)
+%    index = random('Discrete Uniform',numNaturalImages);
+%    temp = NaturalImSet{index};
+%    S(test(ii),:) = temp(:);
+% end
 
 wLow = round((w_pixels-maxPix)/2);
 wHigh = round(w_pixels-wLow);

@@ -1,6 +1,8 @@
 function [] = RF_Playback(AnimalName,Date,NoiseType)
 % RF_Playback.m
 
+cd('~/CloudStation/ByronExp/NoiseRetino')
+
 fileName = sprintf('NoiseData%s%d_%d-PseudoInvResults.mat',NoiseType,Date,AnimalName);
 load(fileName,'F','DIM','totalUnits');
 
@@ -61,10 +63,10 @@ if strcmp(NoiseType,'white') == 1
     beta = 0;
 %     spaceExp = 2;
 elseif strcmp(NoiseType,'pink') == 1
-    beta = -1.5;
+    beta = -2;
 %     spaceExp = 2;
 elseif strcmp(NoiseType,'brown') == 1
-    beta = -2;
+    beta = -2.5;
 %     spaceExp = 2;
 else 
     display('NoiseType must be ''white'', ''pink'' or ''brown'' as a string.')
@@ -82,7 +84,7 @@ S = zeros(numStimuli,DIM(1)*DIM(2),'uint8');
 % below pink noise from Jon Yearsley, 1/f noise generate spatial data
 
 for ii=1:numNoise
-    X = spatialPattern([DIM(2),DIM(1)],beta);
+    X = spatialPattern([DIM(1),DIM(2)],beta);
     X = X-min(min(X));
     X = (X./max(max(X))).*255;
     Y = X(:);
@@ -93,7 +95,7 @@ for ii=1:numNoise
 end
 
 matrix = zeros(DIM(1),DIM(2));
-matrix(1,:) = 1;matrix(end,:) = 1;matrix(:,1) = 1;matrix(:,end) = 1;
+matrix(1:2,:) = 1;matrix(end-1:end,:) = 1;matrix(:,1:2) = 1;matrix(:,end-1:end) = 1;
 edgeInds = matrix(:)==1;clear matrix;
 a = 0;b = 255;
 for ii=1:totalUnits*10
@@ -101,15 +103,20 @@ for ii=1:totalUnits*10
     temprf = F(index,:);
     temprf = reshape(temprf,[DIM(1)-2,DIM(2)-2]);
     
+    temprf = temprf(2:end-1,2:end-1);
+    
     currentMin = min(temprf(:));currentMax = max(temprf(:));
     temprf = ((b-a).*(temprf-currentMin))/(currentMax-currentMin)+a;
     
     fullIm = Grey.*ones(DIM(1),DIM(2));
     fullIm(~edgeInds) = temprf(:);
     
+%     kernel = ones(3,3)./9;
+%     fullIm = conv2(fullIm,kernel,'same');
+    
     if mod(ii,2) == 1
         fullIm = b-fullIm;
-        stimulusNumber(rfIms(ii)) = (index+1)*2;
+        stimulusNumber(rfIms(ii)) = (index+1)+totalUnits;
     end
     S(rfIms(ii),:) = fullIm(:);
     stimulusNumber(rfIms(ii)) = index+1;
@@ -171,7 +178,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('RFPlaybackStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','numNoise',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','maxPix','stimulusNumber');
+    'conv_factor','WaitTimes','beta','DIM','maxPix','stimulusNumber','totalUnits');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
