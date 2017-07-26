@@ -1,54 +1,14 @@
-function [] = Noise_RevCorr(AnimalName,NoiseType)
-%Noise_RevCorr.m
-%   Display a series of colored noise stimuli to infer the receptive fields
-%    See eg Smyth et al. 2003 Receptive Field Organization ...
-%
-% Briefly, if the receptive field for a given neuron is described by a
-%  p-by-1 vector (p being the number of pixels), f, and the stimuli described
-%  by a s-by-p (s being the number of stimuli presented) matrix, S, and the 
-%  response of that neuron described by an s-by-1 vector, then we can write
-%  the responses in terms of the stimuli and the receptive field as 
-%  r = S * f .  We want to infer the spatial receptive field structure
-%  f, so we need S^-1 * r = S^-1 * S * f => f = S^-1 * r ... So, the
-%  following code will present a series of white noise stimuli with each
-%  stimulus lasting flipInterval msec, followed by flipInterval msec of flat 
-%  grey.  The stimuli will be output as the matrix S, along with the 
-%  timeStamps for when they were generated.
-% Images are displayed on the screen in Image Coordinates
-%
-%INPUT: AnimalName - unique identifier for the animal as a number, e.g.
-%            12345
-%       Optional Inputs
-%       NoiseType - 'white' or 'pink' or 'brown' ... defaults to pink
-%
-%       see file NoiseVars.mat for more changeable presets
-%
-%OUTPUT: file named 'NoiseStimDate_AnimalName.mat' , e.g. 
-%          NoiseStim20160718_12345.mat
-%
-%        S - matrix sized numStimuli-by-numPixels that represent each of
-%          the stimuli presented, try 
-%          image = reshape(S(1,:),[width,height]); to view one of the white
-%          noise stimuli
-%        effectivePixels - effective width (and height) of the display window 
-%          in pixels, chosen to fill most of the screen, with the exception
-%          of a small strip on each horizontal edge of the screen
-%        DistToScreen - 25 cm for now
-%
-% Created: 2016/03/04, 24 Cummington, Boston
-%  Byron Price
-% Updated: 2017/07/25
-% By: Byron Price
+function [] = RF_Playback(AnimalName,Date,NoiseType)
+% RF_Playback.m
 
-cd('~/CloudStation/ByronExp/NoiseRetino')
+fileName = sprintf('NoiseData%s%d_%d-PseudoInvResults.mat',NoiseType,Date,AnimalName);
+load(fileName,'F','DIM','totalUnits');
+
 load('NoiseVars.mat');
+numStimuli = round(totalUnits*10+totalUnits*10*0.1);
+numNoise = numStimuli-totalUnits*10;
 
-switch nargin
-    case 1
-        NoiseType = 'pink';
-end
 
-% for motion-contingent display / interaction with recording computer
 startEXP = 254;
 endEXP = 255;
 
@@ -87,17 +47,14 @@ maxPix = max(w_pixels,h_pixels)-200;
 
 % screen size in millimeters and a conversion factor to get from mm to pixels
 [w_mm,h_mm] = Screen('DisplaySize',screenid);
-conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
 % a bit confusing, we want the stimuli produced to have a certain number of
 %  effective pixels, which project to larger squares of on-screen pixels
 maxPix = maxPix-mod(maxPix,screenPix_to_effPix);
 minPix = minPix-mod(minPix,screenPix_to_effPix);
 
-effectivePixels = [maxPix/screenPix_to_effPix,minPix/screenPix_to_effPix];
+conv_factor = (w_mm/w_pixels+h_mm/h_pixels)/2;
 
-gridSpacing = screenPix_to_effPix*conv_factor/10;
-spatialSampleFreq = 1/gridSpacing; % in units of 1/cm
 
 % GENERATION OF NOISE
 if strcmp(NoiseType,'white') == 1
@@ -115,34 +72,50 @@ else
 end
 
 Grey = 127;
-DIM = [effectivePixels(1),effectivePixels(2)];
+
+shuffled = randperm(numStimuli);
+greyIms = shuffled(1:numNoise);
+rfIms = shuffled(numNoise+1:end);clear shuffled;
+
+stimulusNumber = zeros(numStimuli,1);
 S = zeros(numStimuli,DIM(1)*DIM(2),'uint8');
 % below pink noise from Jon Yearsley, 1/f noise generate spatial data
 
-for ii=1:numStimuli
+for ii=1:numNoise
     X = spatialPattern([DIM(2),DIM(1)],beta);
     X = X-min(min(X));
     X = (X./max(max(X))).*255;
     Y = X(:);
     meanVal = mean(Y);difference = meanVal-Grey;
     %figure();imagesc(reshape(Y-difference,DIM));
-    S(ii,:) = Y-difference;
+    S(greyIms(ii),:) = Y-difference;
+    stimulusNumber(greyIms(ii),1) = 1;
 end
+
+matrix = zeros(DIM(1),DIM(2));
+matrix(1,:) = 1;matrix(end,:) = 1;matrix(:,1) = 1;matrix(:,end) = 1;
+edgeInds = matrix(:)==1;clear matrix;
+a = 0;b = 255;
+for ii=1:totalUnits*10
+    index = mod(ii,totalUnits)+1;
+    temprf = F(index,:);
+    temprf = reshape(temprf,[DIM(1)-2,DIM(2)-2]);
+    
+    currentMin = min(temprf(:));currentMax = max(temprf(:));
+    temprf = ((b-a).*(temprf-currentMin))/(currentMax-currentMin)+a;
+    
+    fullIm = Grey.*ones(DIM(1),DIM(2));
+    fullIm(~edgeInds) = temprf(:);
+    
+    if mod(ii,2) == 1
+        fullIm = b-fullIm;
+        stimulusNumber(rfIms(ii)) = (index+1)*2;
+    end
+    S(rfIms(ii),:) = fullIm(:);
+    stimulusNumber(rfIms(ii)) = index+1;
+end
+
 S = uint8(S);
-% Sdisplay = S;
-% Sdisplay(S<60) = 0;Sdisplay(S>=60 & S<196) = 127;Sdisplay(S>=196) = 255;
-
-shuffled = randperm(numStimuli);
-test = shuffled(1:350);
-train = shuffled(350+1:end);
-
-load('NaturalImageSet.mat');
-numNaturalImages = size(NaturalImSet,1);
-for ii=1:length(test)
-   index = random('Discrete Uniform',numNaturalImages);
-   temp = NaturalImSet{index};
-   S(test(ii),:) = temp(:);
-end
 
 wLow = round((w_pixels-maxPix)/2);
 wHigh = round(w_pixels-wLow);
@@ -168,12 +141,13 @@ while tt <= numStimuli
             WaitSecs(4);
         else
             % Convert it to a texture 'tex':
-            Img = reshape(S(tt,:),[DIM(2),DIM(1)]);
+            Img = reshape(S(tt,:),[DIM(1),DIM(2)]);
             tex = Screen('MakeTexture',win,Img);
             Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
             % 1 is bilinear filter
             vbl = Screen('Flip',win);usb.strobeEventWord(1);
-            vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);usb.strobeEventWord(2);
+            vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);
+            usb.strobeEventWord(stimulusNumber(tt));
             vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
             Screen('Close',tex);
             tt = tt+1;
@@ -192,13 +166,13 @@ usb.stopRecording;
 % Close window
 Screen('CloseAll');
 Priority(0);
-% NoiseType = 'pinkHC';
+
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
-filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
-save(filename,'S','numStimuli','flipInterval','effectivePixels',...
+filename = sprintf('RFPlaybackStim%s%d_%d.mat',NoiseType,Date,AnimalName);
+save(filename,'S','numStimuli','flipInterval','numNoise',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix','test','train');
+    'conv_factor','WaitTimes','beta','DIM','maxPix','stimulusNumber');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
@@ -221,4 +195,3 @@ gamma = max([gamma 1e-4]); % handle zero gamma case
 gammaVals = linspace(blackSetPoint/255,whiteSetPoint/255,256).^(1./gamma);
 gammaTable = repmat(gammaVals(:),1,3);
 end
-
