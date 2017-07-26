@@ -145,9 +145,8 @@ while tt <= numStimuli
             tex = Screen('MakeTexture',win,Img);
             Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
             % 1 is bilinear filter
-            vbl = Screen('Flip',win);usb.strobeEventWord(1);
+            vbl = Screen('Flip',win);usb.strobeEventWord(stimulusNumber(tt));
             vbl = Screen('Flip',win,vbl-ifi/2+flipInterval);
-            usb.strobeEventWord(stimulusNumber(tt));
             vbl = Screen('Flip',win,vbl-ifi/2+WaitTimes(tt));
             Screen('Close',tex);
             tt = tt+1;
