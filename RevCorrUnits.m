@@ -122,7 +122,7 @@ clear U V u v;
 
 % DIVIDE DATA INTO TEST AND TRAIN
 if exist('test','var') == 1 && exist('train','var') == 1
-    fprintf('Natural images as test set.\n');
+    fprintf('Train and test predetermined.\n');
 else
     % divide data into training and test
    temp = randperm(numStimuli);
@@ -317,6 +317,8 @@ fullSizeRevised = sum(~edgeInds);
 numLambda = 20;
 loglambda = logspace(3,7,numLambda);
 F = zeros(totalUnits,fullSizeRevised);
+STA = zeros(totalUnits,fullSize);
+STC = zeros(totalUnits,fullSize,fullSize);
 bestLambda = zeros(totalUnits,1);
 heldOutDeviance = zeros(totalUnits,5);
 heldOutExplainedVariance = zeros(totalUnits,1);
@@ -400,6 +402,16 @@ for zz=1:totalUnits
    %   Journal of Business and Economic Statistics
    heldOutExplainedVariance(zz,1) = 1-tempDev(bestMap,1)/dev;
    fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
+   
+   totalSpikes = sum(spikeTrain);
+   for ii=1:numStimuli
+      STA(zz,:) = STA(zz,:)+S(ii,:).*(spikeTrain(ii)/(numStimuli*totalSpikes));
+   end
+   
+   for ii=1:numStimuli
+      STC(zz,:,:) = STC(zz,:,:)+(1/(numStimuli-1))*(1/totalSpikes)*...
+          (spikeTrain(ii)).*((S(ii,:)-STA(zz,:))*(S(ii,:)-STA(zz,:))');
+   end
 end
 
 % save the results
@@ -408,7 +420,7 @@ save(fileName,'F','totalUnits','bestLambda',...
     'reducedSpikeCount','DIM','unbiasedS','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
     'svStrobed','heldOutDeviance','numStimuli','S_f','sigmoidNonlin',...
-    'heldOutExplainedVariance');
+    'heldOutExplainedVariance','STA','STC');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
