@@ -31,15 +31,13 @@ function [] = Noise_RevCorr(AnimalName,NoiseType)
 %          image = reshape(S(1,:),[width,height]); to view one of the white
 %          noise stimuli
 %        effectivePixels - effective width (and height) of the display window 
-%          in pixels, first chosen as the minimum of the width and height 
-%          of the current display ... the display is forced to be square
-%          and the width in effectivePixels is 1/4 the width in true screen
-%          pixels
+%          in pixels, chosen to fill most of the screen, with the exception
+%          of a small strip on each horizontal edge of the screen
 %        DistToScreen - 25 cm for now
 %
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/07/12
+% Updated: 2017/07/25
 % By: Byron Price
 
 cd('~/CloudStation/ByronExp/NoiseRetino')
@@ -134,6 +132,18 @@ S = uint8(S);
 % Sdisplay = S;
 % Sdisplay(S<60) = 0;Sdisplay(S>=60 & S<196) = 127;Sdisplay(S>=196) = 255;
 
+shuffled = randperm(numStimuli);
+test = shuffled(1:350);
+train = shuffled(350+1:end);
+
+load('NaturalImageSet.mat');
+numNaturalImages = size(NaturalImSet,1);
+for ii=1:length(test)
+   index = random('Discrete Uniform',numNaturalImages);
+   temp = NaturalImSet{index};
+   S(test(ii),:) = temp(:);
+end
+
 wLow = round((w_pixels-maxPix)/2);
 wHigh = round(w_pixels-wLow);
 hLow = round((h_pixels-minPix)/2);
@@ -188,7 +198,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix');
+    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix','test','train');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
