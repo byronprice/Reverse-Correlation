@@ -289,24 +289,59 @@ bigCount = 1;
 for jj=1:DIM(2)
     for ii=1:DIM(1)
         tempMat = zeros(DIM(1),DIM(2));
-        tempMat(ii,jj) = 4;
-        if ii > 1
-            tempMat(ii-1,jj) = -1;
-        end
-        if ii < DIM(1)
+        
+        if ii==1 && jj==1
+            tempMat(ii,jj) = 2;
             tempMat(ii+1,jj) = -1;
-        end
-        if jj > 1
+            tempMat(ii,jj+1) = -1;
+        elseif ii==DIM(1) && jj==1
+            tempMat(ii,jj) = 2;
+            tempMat(ii-1,jj) = -1;
+            tempMat(ii,jj+1) = -1;
+        elseif ii==1 && jj==DIM(2)
+            tempMat(ii,jj) = 2;
+            tempMat(ii,jj-1) = -1;
+            tempMat(ii+1,jj) = -1;
+        elseif ii == DIM(1) && jj == DIM(2)
+            tempMat(ii,jj) = 2;
+            tempMat(ii-1,jj) = -1;
+            tempMat(ii,jj-1) = -1;
+        elseif ii==1
+            tempMat(ii,jj) = 3;
+            tempMat(ii,jj-1) = -1;
+            tempMat(ii+1,jj) = -1;
+            tempMat(ii,jj+1) = -1;
+        elseif jj==1
+            tempMat(ii,jj) = 3;
+            tempMat(ii-1,jj) = -1;
+            tempMat(ii,jj+1) = -1;
+            tempMat(ii+1,jj) = -1;
+        elseif ii==DIM(1)
+            tempMat(ii,jj) = 3;
+            tempMat(ii-1,jj) = -1;
+            tempMat(ii,jj-1) = -1;
+            tempMat(ii,jj+1) = -1;
+        elseif jj==DIM(2)
+            tempMat(ii,jj) = 3;
+            tempMat(ii-1,jj) = -1;
+            tempMat(ii+1,jj) = -1;
+            tempMat(ii,jj-1) = -1;
+        else
+            tempMat(ii,jj) = 4;
+            tempMat(ii-1,jj) = -1;
+            tempMat(ii+1,jj) = -1;
+            tempMat(ii,jj+1) = -1;
             tempMat(ii,jj-1) = -1;
         end
-        if jj < DIM(2)
-            tempMat(ii,jj+1) = -1;
-        end
         L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+%         imagesc(tempMat);caxis([-1 4]);pause(0.1);
     end
 end
 
 warning('off','all');
+
+inverseSf = 1./S_f;
+inverseSf(inverseSf==inf) = 0;
 
 matrix = zeros(DIM(1),DIM(2));
 matrix(1,:) = 1;matrix(end,:) = 1;matrix(:,1) = 1;matrix(:,end) = 1;
@@ -318,7 +353,13 @@ numLambda = 20;
 loglambda = logspace(3,7,numLambda);
 F = zeros(totalUnits,fullSizeRevised);
 STA = zeros(totalUnits,fullSize);
-STC = zeros(totalUnits,fullSize,fullSize);
+
+if fullSize<=10000
+    STC = zeros(totalUnits,fullSize,fullSize);
+else
+    STC = 0;
+end
+
 bestLambda = zeros(totalUnits,1);
 heldOutDeviance = zeros(totalUnits,5);
 heldOutExplainedVariance = zeros(totalUnits,1);
@@ -337,7 +378,7 @@ for zz=1:totalUnits
    tempDev = zeros(numLambda,4);
 %    allOnesTrain = ones(length(train),1);
 %    allOnesTest = ones(length(test),1);
-   for jj=1:numLambda
+   for jj=9:10
        % calculate regularized pseudoinverse solution
       constraints = [unbiasedS(train,:);loglambda(jj).*L];
       fhat = constraints\r;fhat = full(fhat);
@@ -405,12 +446,19 @@ for zz=1:totalUnits
    
    totalSpikes = sum(spikeTrain);
    for ii=1:numStimuli
-      STA(zz,:) = STA(zz,:)+S(ii,:).*(spikeTrain(ii)/(numStimuli*totalSpikes));
+      if spikeTrain(ii) > 0
+         STA(zz,:) = STA(zz,:)+S(train(ii),:).*(spikeTrain(train(ii))/totalSpikes);
+      end
    end
    
-   for ii=1:numStimuli
-      STC(zz,:,:) = STC(zz,:,:)+(1/(numStimuli-1))*(1/totalSpikes)*...
-          (spikeTrain(ii)).*((S(ii,:)-STA(zz,:))*(S(ii,:)-STA(zz,:))');
+   if fullSize<=10000
+       for ii=1:numStimuli
+           if spikeTrain(train(ii)) > 0
+               STC(zz,:,:) = STC(zz,:,:)+(1/(totalSpikes-1))*...
+                   (spikeTrain(train(ii))).*((S(ii,:)-STA(zz,:))*...
+                   (S(ii,:)-STA(zz,:))');
+           end
+       end
    end
 end
 
