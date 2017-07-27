@@ -98,6 +98,8 @@ matrix = zeros(DIM(1),DIM(2));
 matrix(1:2,:) = 1;matrix(end-1:end,:) = 1;matrix(:,1:2) = 1;matrix(:,end-1:end) = 1;
 edgeInds = matrix(:)==1;clear matrix;
 a = 0;b = 255;
+
+alpha = 0.05;
 for ii=1:totalUnits*10
     index = mod(ii,totalUnits)+1;
     temprf = F(index,:);
@@ -105,11 +107,21 @@ for ii=1:totalUnits*10
     
     temprf = temprf(2:end-1,2:end-1);
     
+    [lowhigh] = quantile(temprf(:),[alpha,1-alpha]);
+    
+    temprf(temprf>lowhigh(1) & temprf<lowhigh(2)) = 0;
+    
     currentMin = min(temprf(:));currentMax = max(temprf(:));
     temprf = ((b-a).*(temprf-currentMin))/(currentMax-currentMin)+a;
     
+    difference = mean(temprf(:))-Grey;
+    
+    temprf = temprf-difference;
+    
     fullIm = Grey.*ones(DIM(1),DIM(2));
     fullIm(~edgeInds) = temprf(:);
+    
+    fullIm = min(max(fullIm,a),b);
     
 %     kernel = ones(3,3)./9;
 %     fullIm = conv2(fullIm,kernel,'same');
@@ -178,7 +190,7 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('RFPlaybackStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','numNoise',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','maxPix','stimulusNumber','totalUnits');
+    'conv_factor','WaitTimes','beta','DIM','maxPix','stimulusNumber','totalUnits','alpha');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)

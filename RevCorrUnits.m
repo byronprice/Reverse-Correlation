@@ -291,38 +291,38 @@ for jj=1:DIM(2)
         tempMat = zeros(DIM(1),DIM(2));
         
         if ii==1 && jj==1
-            tempMat(ii,jj) = 2;
-            tempMat(ii+1,jj) = -1;
+            tempMat(ii,jj) = 4;
+            tempMat(ii+1,jj) = -2;
             tempMat(ii,jj+1) = -1;
         elseif ii==DIM(1) && jj==1
-            tempMat(ii,jj) = 2;
+            tempMat(ii,jj) = 4;
             tempMat(ii-1,jj) = -1;
             tempMat(ii,jj+1) = -1;
         elseif ii==1 && jj==DIM(2)
-            tempMat(ii,jj) = 2;
+            tempMat(ii,jj) = 4;
             tempMat(ii,jj-1) = -1;
             tempMat(ii+1,jj) = -1;
         elseif ii == DIM(1) && jj == DIM(2)
-            tempMat(ii,jj) = 2;
+            tempMat(ii,jj) = 4;
             tempMat(ii-1,jj) = -1;
             tempMat(ii,jj-1) = -1;
         elseif ii==1
-            tempMat(ii,jj) = 3;
+            tempMat(ii,jj) = 4;
             tempMat(ii,jj-1) = -1;
             tempMat(ii+1,jj) = -1;
             tempMat(ii,jj+1) = -1;
         elseif jj==1
-            tempMat(ii,jj) = 3;
+            tempMat(ii,jj) = 4;
             tempMat(ii-1,jj) = -1;
             tempMat(ii,jj+1) = -1;
             tempMat(ii+1,jj) = -1;
         elseif ii==DIM(1)
-            tempMat(ii,jj) = 3;
+            tempMat(ii,jj) = 4;
             tempMat(ii-1,jj) = -1;
             tempMat(ii,jj-1) = -1;
             tempMat(ii,jj+1) = -1;
         elseif jj==DIM(2)
-            tempMat(ii,jj) = 3;
+            tempMat(ii,jj) = 4;
             tempMat(ii-1,jj) = -1;
             tempMat(ii+1,jj) = -1;
             tempMat(ii,jj-1) = -1;
@@ -447,16 +447,16 @@ for zz=1:totalUnits
    totalSpikes = sum(spikeTrain);
    for ii=1:numStimuli
       if spikeTrain(ii) > 0
-         STA(zz,:) = STA(zz,:)+S(train(ii),:).*(spikeTrain(train(ii))/totalSpikes);
+         STA(zz,:) = STA(zz,:)+S(ii,:).*(spikeTrain(ii)/totalSpikes);
       end
    end
    
    if fullSize<=10000
        for ii=1:numStimuli
            if spikeTrain(train(ii)) > 0
+               difference = S(ii,:)-STA(zz,:);
                STC(zz,:,:) = STC(zz,:,:)+(1/(totalSpikes-1))*...
-                   (spikeTrain(train(ii))).*((S(ii,:)-STA(zz,:))*...
-                   (S(ii,:)-STA(zz,:))');
+                   (spikeTrain(ii)).*(difference*difference');
            end
        end
    end
