@@ -350,7 +350,7 @@ edgeInds = matrix(:)==1;
 fullSizeRevised = sum(~edgeInds);
 
 numLambda = 20;
-loglambda = logspace(3,7,numLambda);
+loglambda = logspace(2,6,numLambda);
 F = zeros(totalUnits,fullSizeRevised);
 STA = zeros(totalUnits,fullSize);
 
@@ -371,6 +371,23 @@ for zz=1:totalUnits
    baseRate = sum(sum(spikeTrain(:,51:400)))./(numStimuli*0.35);
    spikeTrain = sum(spikeTrain(:,50:300),2);
    
+   % PCA solution
+%    [V,D] = eig(cov(S));
+%    eigenvals = diag(D);
+%    start = find(eigenvals>10,1,'first');
+%    q = size(eigenvals(start:end),1);
+%    meanEig = mean(eigenvals(1:start-1));
+%    W = V(:,start:end)*sqrtm(D(start:end,start:end)-meanEig.*eye(q));
+%    W = fliplr(W);
+%    Winv = pinv(W);
+%    x = zeros(q,numStimuli);
+%    for ii=1:numStimuli
+%       x(:,ii) = Winv*(S(ii,:)'-127); 
+%    end
+%    x = x';
+%    fhat = x(train,:)\spikeTrain(train); % then proceed as usual, with no smoothing
+   
+   
    r = [spikeTrain(train);sparse(fullSize,1)];
    
    tempF = zeros(numLambda,fullSizeRevised);
@@ -378,7 +395,7 @@ for zz=1:totalUnits
    tempDev = zeros(numLambda,4);
 %    allOnesTrain = ones(length(train),1);
 %    allOnesTest = ones(length(test),1);
-   for jj=9:10
+   for jj=1:numLambda
        % calculate regularized pseudoinverse solution
       constraints = [unbiasedS(train,:);loglambda(jj).*L];
       fhat = constraints\r;fhat = full(fhat);
@@ -394,7 +411,10 @@ for zz=1:totalUnits
       x0 = [5,0.5,10,baseRate];
       lb = [0,0,0,0];ub = [5e2,Inf,Inf,Inf];
 %       options.Algorithm = 'levenberg-marquardt';
-      sigmoidParams = lsqnonlin(myFun,x0,lb,ub);
+      %options.MaxFunctionEvaluations = 1000;
+      options = optimoptions(@lsqnonlin,'MaxIterations',1000);
+      options.Display = 'off';
+      sigmoidParams = lsqnonlin(myFun,x0,lb,ub,options);
       
       temp = sigmoidParams(1)./(1+exp(-(result-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
       initialDev = spikeTrain(train).*log(spikeTrain(train)./temp)-(spikeTrain(train)-temp);
@@ -428,6 +448,7 @@ for zz=1:totalUnits
    end
   
    [~,bestMap] = min(tempDev(:,1));
+   fprintf('Best Map: %d\n',bestMap);
    F(zz,:) = tempF(bestMap,:);
    bestLambda(zz) = loglambda(bestMap);
    heldOutDeviance(zz,1:4) = tempDev(bestMap,:);
@@ -453,7 +474,7 @@ for zz=1:totalUnits
    
    if fullSize<=10000
        for ii=1:numStimuli
-           if spikeTrain(train(ii)) > 0
+           if spikeTrain(ii) > 0
                difference = S(ii,:)-STA(zz,:);
                STC(zz,:,:) = STC(zz,:,:)+(1/(totalSpikes-1))*...
                    (spikeTrain(ii)).*(difference*difference');
