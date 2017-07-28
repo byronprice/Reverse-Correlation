@@ -218,7 +218,7 @@ end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement svStrobed S S_f test train;
+    X Y totalMillisecs reducedMov movement svStrobed S S_f test train beta;
 
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
@@ -292,7 +292,7 @@ for jj=1:DIM(2)
         
         if ii==1 && jj==1
             tempMat(ii,jj) = 4;
-            tempMat(ii+1,jj) = -2;
+            tempMat(ii+1,jj) = -1;
             tempMat(ii,jj+1) = -1;
         elseif ii==DIM(1) && jj==1
             tempMat(ii,jj) = 4;
@@ -349,7 +349,7 @@ edgeInds = matrix(:)==1;
 
 fullSizeRevised = sum(~edgeInds);
 
-numLambda = 20;
+numLambda = 25;
 loglambda = logspace(2,6,numLambda);
 F = zeros(totalUnits,fullSizeRevised);
 STA = zeros(totalUnits,fullSize);
@@ -369,7 +369,7 @@ for zz=1:totalUnits
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
    
    baseRate = sum(sum(spikeTrain(:,51:400)))./(numStimuli*0.35);
-   spikeTrain = sum(spikeTrain(:,50:300),2);
+   spikeTrain = sum(spikeTrain(:,50:200),2);
    
    % PCA solution
 %    [V,D] = eig(cov(S));
@@ -489,7 +489,7 @@ save(fileName,'F','totalUnits','bestLambda',...
     'reducedSpikeCount','DIM','unbiasedS','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
     'svStrobed','heldOutDeviance','numStimuli','S_f','sigmoidNonlin',...
-    'heldOutExplainedVariance','STA','STC');
+    'heldOutExplainedVariance','STA','STC','beta');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
