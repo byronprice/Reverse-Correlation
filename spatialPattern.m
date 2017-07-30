@@ -63,7 +63,7 @@ S_f(S_f==inf) = 0;
 phi = rand(DIM);
 
 % Inverse Fourier transform to obtain the the spatial pattern
-x = ifft2(S_f .* (cos(2*pi*phi)+1i*sin(2*pi*phi)));
+x = ifft2((S_f.^0.5) .* (cos(2*pi*phi)+1i*sin(2*pi*phi)));
 
 % Pick just the real component
 x = real(x);
