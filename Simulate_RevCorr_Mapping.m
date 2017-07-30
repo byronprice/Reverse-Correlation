@@ -13,12 +13,13 @@ clear U V T u v t;
 S_f(S_f==inf) = 0;
 % S_f = S_f.^0.5;
 phi = rand([DIM(1)*2,DIM(2)*2,DIM(3)*2],'single');
-tempFFT = S_f.*(cos(2*pi*phi)+1i*sin(2*pi*phi));
+tempFFT = (S_f.^0.5).*(cos(2*pi*phi)+1i*sin(2*pi*phi));
 X = real(ifftn(tempFFT));
 
 % get unbiased movie
 S_f = 1./S_f;
 S_f(S_f==inf) = 0;
+S_f = S_f.^0.25;
 
 desiredMin = 0;
 desiredMax = 255;
