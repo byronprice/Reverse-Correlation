@@ -91,33 +91,6 @@ xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
 yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
     -round(screenPix_to_effPix*DIM(1)/4)+1,DIM(1));
 
-[X,Y] = meshgrid(xaxis,yaxis);
-
-% CREATE UNBIASED VERSION OF MOVIE BY DIVIDING OUT POWER SPECTRUM
-%  USED TO GENERATE THE MOVIE
-
-u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/DIM(1);
-v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/DIM(2);
-[V,U] = meshgrid(v,u);
-S_f = (U.^2+V.^2).^(beta/2);
-
-S_f(S_f==inf) = 0;
-S_f = 1./S_f;
-S_f(S_f==inf) = 0;
-a = 0;b = 255;
-unbiasedS = zeros(size(S));
-for ii=1:numStimuli
-    temp = reshape(real(ifft2(fft2(double(reshape(S(ii,:),[DIM(1),DIM(2)]))).*S_f)),[DIM(1)*DIM(2),1])';
-    currentMin = min(temp);currentMax = max(temp);
-    temp = ((b-a).*(temp-currentMin))/(currentMax-currentMin)+a;
-    unbiasedS(ii,:) = temp;
-end
-
-if strcmp(NoiseType,'pinkHC') == 1
-   unbiasedS(unbiasedS<60) = 0;unbiasedS(unbiasedS>=60 & unbiasedS<196) = 127;
-   unbiasedS(unbiasedS>=196) = 255;
-end
-
 clear U V u v;
 
 % DIVIDE DATA INTO TEST AND TRAIN
@@ -217,8 +190,8 @@ for ii=1:totalUnits
 end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
-    reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement svStrobed S S_f test train beta;
+    reducedSpikeCount DIM allts strobeData xaxis yaxis ...
+    X Y totalMillisecs reducedMov movement svStrobed S test train beta;
 
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
@@ -340,8 +313,6 @@ end
 
 warning('off','all');
 
-inverseSf = 1./S_f;
-inverseSf(inverseSf==inf) = 0;
 
 matrix = zeros(DIM(1),DIM(2));
 matrix(1,:) = 1;matrix(end,:) = 1;matrix(:,1) = 1;matrix(:,end) = 1;
@@ -350,7 +321,7 @@ edgeInds = matrix(:)==1;
 fullSizeRevised = sum(~edgeInds);
 
 numLambda = 25;
-loglambda = logspace(2,6,numLambda);
+loglambda = logspace(3,5,numLambda);
 F = zeros(totalUnits,fullSizeRevised);
 STA = zeros(totalUnits,fullSize);
 
@@ -397,13 +368,9 @@ for zz=1:totalUnits
 %    allOnesTest = ones(length(test),1);
    for jj=1:numLambda
        % calculate regularized pseudoinverse solution
-      constraints = [unbiasedS(train,:);loglambda(jj).*L];
+      constraints = [S(train,:);loglambda(jj).*L];
       fhat = constraints\r;fhat = full(fhat);
-      
-      % remove bias created by using pink noise
-      temp = reshape(fhat,[DIM(1),DIM(2)]);
-      temp = real(ifft2(fft2(temp).*S_f));
-      fhat = temp(:);fhat = fhat(~edgeInds);
+      fhat = fhat(~edgeInds);
       
       % fit sigmoid nonlinearity
       result = S(train,~edgeInds)*fhat;
@@ -486,9 +453,9 @@ end
 % save the results
 fileName = strcat(EphysFileName(1:end-9),'-PseudoInvResults.mat');
 save(fileName,'F','totalUnits','bestLambda',...
-    'reducedSpikeCount','DIM','unbiasedS','movement',...
+    'reducedSpikeCount','DIM','S','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
-    'svStrobed','heldOutDeviance','numStimuli','S_f','sigmoidNonlin',...
+    'svStrobed','heldOutDeviance','numStimuli','sigmoidNonlin',...
     'heldOutExplainedVariance','STA','STC','beta');
 
 % REVERSE CORRELATION SOLUTION
