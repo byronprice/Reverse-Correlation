@@ -321,7 +321,7 @@ edgeInds = matrix(:)==1;
 fullSizeRevised = sum(~edgeInds);
 
 numLambda = 25;
-loglambda = logspace(3,5,numLambda);
+loglambda = logspace(2,6,numLambda);
 F = zeros(totalUnits,fullSizeRevised);
 STA = zeros(totalUnits,fullSize);
 
@@ -432,6 +432,11 @@ for zz=1:totalUnits
    heldOutExplainedVariance(zz,1) = 1-tempDev(bestMap,1)/dev;
    fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
    
+   if heldOutExplainedVariance(zz,1) >= 0.05
+      figure();imagesc(reshape(fhat,[DIM(1)-2,DIM(2)-2]));
+      title(sprintf('%s',EphysFileName(1:end-9)));
+   end
+   
    totalSpikes = sum(spikeTrain);
    for ii=1:numStimuli
       if spikeTrain(ii) > 0
@@ -477,7 +482,7 @@ save(fileName,'F','totalUnits','bestLambda',...
 end
 
 function [sigmoidParams] = FitSigmoid(sigmoidParams,initialDev,spikeTrain,result)
-N = 5e4;
+N = 1e5;
 numParams = length(sigmoidParams);
 paramVec = zeros(numParams,N);
 devVec = zeros(N,1);

@@ -99,7 +99,7 @@ matrix(1:2,:) = 1;matrix(end-1:end,:) = 1;matrix(:,1:2) = 1;matrix(:,end-1:end) 
 edgeInds = matrix(:)==1;clear matrix;
 a = 0;b = 255;
 
-alpha = 0.05;
+alpha = 0.1;
 for ii=1:totalUnits*10
     index = mod(ii,totalUnits)+1;
     temprf = F(index,:);
