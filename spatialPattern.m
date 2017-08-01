@@ -62,7 +62,7 @@ S_f(S_f==inf) = 0;
 % Generate a grid of random phase shifts
 phi = rand(DIM);
 
-% Inverse Fourier transform to obtain the the spatial pattern
+% Inverse Fourier transform to obtain the spatial pattern
 x = ifft2((S_f.^0.5) .* (cos(2*pi*phi)+1i*sin(2*pi*phi)));
 
 % Pick just the real component
