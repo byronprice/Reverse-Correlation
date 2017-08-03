@@ -101,7 +101,7 @@ while count<=numMoviesToDisplay
             fprintf('Motion Pause ...\n');
         else
             index = movieNums(count);
-            load(sprintf('11Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
+            load(sprintf('12Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
             %     S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
             tt = 1;
             while tt <= numStimuli
@@ -134,7 +134,7 @@ usb.stopRecording;
 Screen('CloseAll');
 Priority(0);
 
-movieType = '11Sec_PinkNoise';
+movieType = '12Sec_PinkNoise';
 
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
