@@ -193,6 +193,10 @@ clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM allts strobeData xaxis yaxis ...
     X Y totalMillisecs reducedMov movement svStrobed S test train beta;
 
+
+% get expected location of RF based on LFP receptive region mapping
+[centerPositions] = GetRetinoMap(AnimalName);
+
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
 % basisStdDevs = [250,500,750,1000,1250,1500,1750,2000,2500];
@@ -320,16 +324,10 @@ edgeInds = matrix(:)==1;
 
 fullSizeRevised = sum(~edgeInds);
 
-numLambda = 25;
+numLambda = 50;
 loglambda = logspace(2,6,numLambda);
-F = zeros(totalUnits,fullSizeRevised);
+F = cell(totalUnits,1);
 STA = zeros(totalUnits,fullSize);
-
-if fullSize<=10000
-    STC = zeros(totalUnits,fullSize,fullSize);
-else
-    STC = 0;
-end
 
 bestLambda = zeros(totalUnits,1);
 heldOutDeviance = zeros(totalUnits,5);
@@ -340,7 +338,7 @@ for zz=1:totalUnits
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
    
    baseRate = sum(sum(spikeTrain(:,51:400)))./(numStimuli*0.35);
-   spikeTrain = sum(spikeTrain(:,50:200),2);
+   spikeTrain = sum(spikeTrain(:,50:150),2);
    
    % PCA solution
 %    [V,D] = eig(cov(S));
@@ -432,7 +430,7 @@ for zz=1:totalUnits
    heldOutExplainedVariance(zz,1) = 1-tempDev(bestMap,1)/dev;
    fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
    
-   if heldOutExplainedVariance(zz,1) >= 0.05
+   if heldOutExplainedVariance(zz,1) >= 0.02
       figure();imagesc(reshape(fhat,[DIM(1)-2,DIM(2)-2]));
       title(sprintf('%s',EphysFileName(1:end-9)));
    end
@@ -444,15 +442,6 @@ for zz=1:totalUnits
       end
    end
    
-   if fullSize<=10000
-       for ii=1:numStimuli
-           if spikeTrain(ii) > 0
-               difference = S(ii,:)-STA(zz,:);
-               STC(zz,:,:) = STC(zz,:,:)+(1/(totalSpikes-1))*...
-                   (spikeTrain(ii)).*(difference*difference');
-           end
-       end
-   end
 end
 
 % save the results
@@ -461,7 +450,7 @@ save(fileName,'F','totalUnits','bestLambda',...
     'reducedSpikeCount','DIM','S','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
     'svStrobed','heldOutDeviance','numStimuli','sigmoidNonlin',...
-    'heldOutExplainedVariance','STA','STC','beta');
+    'heldOutExplainedVariance','STA','beta');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
@@ -525,6 +514,50 @@ end
 
 [~,ind] = min(devVec);
 sigmoidParams = paramVec(:,ind);
+
+end
+
+function [centerPositions] = GetRetinoMap(AnimalName)
+cd ~/CloudStation/ByronExp/Retino/
+fileName = strcat('RetinoMapBayes*',num2str(AnimalName),'.mat');
+files = dir(fileName);
+
+load(files(end).name);
+
+x = 1:2:w_pixels;y=1:2:h_pixels;
+[X,Y] = meshgrid(x,y);
+
+centerPositions = zeros(numChans,2);
+for ii=1:numChans
+    finalIm = zeros(length(x),length(y));
+    samples = squeeze(posteriorSample(ii,:,:));
+    N = 1000;
+    for ll=1:N
+        index = random('Discrete Uniform',numSamples);
+        parameterVec = samples(:,index);
+        b = [parameterVec(1),parameterVec(4),parameterVec(5),parameterVec(6)];
+        distX = X-parameterVec(2);distY = Y-parameterVec(3);
+        finalIm = finalIm+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
+                     (distY.^2)./(2*b(3)*b(3)))+b(4);
+%         for jj=1:length(x)
+%             for kk=1:length(y)
+%                 distX = x(jj)-parameterVec(2);
+%                 distY = y(kk)-parameterVec(3);
+%                 
+%                 finalIm(jj,kk) = finalIm(jj,kk)+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
+%                     (distY.^2)./(2*b(3)*b(3)))+b(4);
+%             end
+%         end
+    end
+    finalIm = finalIm./N;
+    [~,maxInd] = max(finalIm(:));
+    [row,col] = ind2sub(size(finalIm),maxInd);
+    centerPositions(ii,1) = row;
+    centerPositions(ii,2) = col;
+end
+
+
+cd ~/CloudStation/ByronExp/NoiseRetino/
 
 end
 
