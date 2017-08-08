@@ -108,12 +108,14 @@ temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
 totalUnits = sum(sum(temp))-numChans;
 
+unitChannel = zeros(totalUnits,1);
 temp = cell(totalUnits,1);
 count = 1;
 for ii=1:numChans
    for jj=2:nunits1
        if isempty(allts{jj,Chans(ii)}) == 0
            temp{count} = allts{jj,Chans(ii)};
+           unitChannel(count) = ii;
            count = count+1;
        end
    end
@@ -191,11 +193,12 @@ end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement svStrobed S test train beta;
+    X Y totalMillisecs reducedMov movement svStrobed S ...
+    test train beta AnimalName unitChannel;
 
 
 % get expected location of RF based on LFP receptive region mapping
-[centerPositions] = GetRetinoMap(AnimalName);
+[centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis);
 
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
@@ -258,76 +261,13 @@ clearvars -except EphysFileName totalUnits numStimuli ...
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION, CREATE CONVOLUTION MATRIX L
 S = double(S);
-fullSize = DIM(1)*DIM(2);
-L = sparse(fullSize,fullSize);
-
-%operator = [0,-1,0;-1,4,-1;0,-1,0];
-bigCount = 1;
-for jj=1:DIM(2)
-    for ii=1:DIM(1)
-        tempMat = zeros(DIM(1),DIM(2));
-        
-        if ii==1 && jj==1
-            tempMat(ii,jj) = 4;
-            tempMat(ii+1,jj) = -1;
-            tempMat(ii,jj+1) = -1;
-        elseif ii==DIM(1) && jj==1
-            tempMat(ii,jj) = 4;
-            tempMat(ii-1,jj) = -1;
-            tempMat(ii,jj+1) = -1;
-        elseif ii==1 && jj==DIM(2)
-            tempMat(ii,jj) = 4;
-            tempMat(ii,jj-1) = -1;
-            tempMat(ii+1,jj) = -1;
-        elseif ii == DIM(1) && jj == DIM(2)
-            tempMat(ii,jj) = 4;
-            tempMat(ii-1,jj) = -1;
-            tempMat(ii,jj-1) = -1;
-        elseif ii==1
-            tempMat(ii,jj) = 4;
-            tempMat(ii,jj-1) = -1;
-            tempMat(ii+1,jj) = -1;
-            tempMat(ii,jj+1) = -1;
-        elseif jj==1
-            tempMat(ii,jj) = 4;
-            tempMat(ii-1,jj) = -1;
-            tempMat(ii,jj+1) = -1;
-            tempMat(ii+1,jj) = -1;
-        elseif ii==DIM(1)
-            tempMat(ii,jj) = 4;
-            tempMat(ii-1,jj) = -1;
-            tempMat(ii,jj-1) = -1;
-            tempMat(ii,jj+1) = -1;
-        elseif jj==DIM(2)
-            tempMat(ii,jj) = 4;
-            tempMat(ii-1,jj) = -1;
-            tempMat(ii+1,jj) = -1;
-            tempMat(ii,jj-1) = -1;
-        else
-            tempMat(ii,jj) = 4;
-            tempMat(ii-1,jj) = -1;
-            tempMat(ii+1,jj) = -1;
-            tempMat(ii,jj+1) = -1;
-            tempMat(ii,jj-1) = -1;
-        end
-        L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
-%         imagesc(tempMat);caxis([-1 4]);pause(0.1);
-    end
-end
 
 warning('off','all');
 
-
-matrix = zeros(DIM(1),DIM(2));
-matrix(1,:) = 1;matrix(end,:) = 1;matrix(:,1) = 1;matrix(:,end) = 1;
-edgeInds = matrix(:)==1;
-
-fullSizeRevised = sum(~edgeInds);
-
 numLambda = 50;
-loglambda = logspace(2,6,numLambda);
+loglambda = logspace(1,7,numLambda);
 F = cell(totalUnits,1);
-STA = zeros(totalUnits,fullSize);
+STA = zeros(totalUnits,DIM(1)*DIM(2));
 
 bestLambda = zeros(totalUnits,1);
 heldOutDeviance = zeros(totalUnits,5);
@@ -355,23 +295,79 @@ for zz=1:totalUnits
 %    end
 %    x = x';
 %    fhat = x(train,:)\spikeTrain(train); % then proceed as usual, with no smoothing
+
+   % GET SMALLER SECTION OF IMAGE DISPLAYED ON THE SCREEN
+   fullSize = newDims(unitChannel(zz),1)*newDims(unitChannel(zz),2);
+   L = sparse(fullSize,fullSize);
    
+   %operator = [0,-1,0;-1,4,-1;0,-1,0];
+   bigCount = 1;
+   for jj=1:newDims(unitChannel(zz),2)
+       for ii=1:newDims(zz,1)
+           tempMat = zeros(newDims(unitChannel(zz),1),newDims(unitChannel(zz),2));
+           
+           if ii==1 && jj==1
+               tempMat(ii,jj) = 4;
+               tempMat(ii+1,jj) = -1;
+               tempMat(ii,jj+1) = -1;
+           elseif ii==newDims(unitChannel(zz),1) && jj==1
+               tempMat(ii,jj) = 4;
+               tempMat(ii-1,jj) = -1;
+               tempMat(ii,jj+1) = -1;
+           elseif ii==1 && jj==newDims(unitChannel(zz),2)
+               tempMat(ii,jj) = 4;
+               tempMat(ii,jj-1) = -1;
+               tempMat(ii+1,jj) = -1;
+           elseif ii == newDims(unitChannel(zz),1) && jj == newDims(unitChannel(zz),2)
+               tempMat(ii,jj) = 4;
+               tempMat(ii-1,jj) = -1;
+               tempMat(ii,jj-1) = -1;
+           elseif ii==1
+               tempMat(ii,jj) = 4;
+               tempMat(ii,jj-1) = -1;
+               tempMat(ii+1,jj) = -1;
+               tempMat(ii,jj+1) = -1;
+           elseif jj==1
+               tempMat(ii,jj) = 4;
+               tempMat(ii-1,jj) = -1;
+               tempMat(ii,jj+1) = -1;
+               tempMat(ii+1,jj) = -1;
+           elseif ii==newDims(unitChannel(zz),1)
+               tempMat(ii,jj) = 4;
+               tempMat(ii-1,jj) = -1;
+               tempMat(ii,jj-1) = -1;
+               tempMat(ii,jj+1) = -1;
+           elseif jj==newDims(unitChannel(zz),2)
+               tempMat(ii,jj) = 4;
+               tempMat(ii-1,jj) = -1;
+               tempMat(ii+1,jj) = -1;
+               tempMat(ii,jj-1) = -1;
+           else
+               tempMat(ii,jj) = 4;
+               tempMat(ii-1,jj) = -1;
+               tempMat(ii+1,jj) = -1;
+               tempMat(ii,jj+1) = -1;
+               tempMat(ii,jj-1) = -1;
+           end
+           L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+           %         imagesc(tempMat);caxis([-1 4]);pause(0.1);
+       end
+   end
    
    r = [spikeTrain(train);sparse(fullSize,1)];
    
-   tempF = zeros(numLambda,fullSizeRevised);
+   tempF = zeros(numLambda,fullSize);
    tempSigmoid = zeros(numLambda,4);
    tempDev = zeros(numLambda,4);
 %    allOnesTrain = ones(length(train),1);
 %    allOnesTest = ones(length(test),1);
    for jj=1:numLambda
        % calculate regularized pseudoinverse solution
-      constraints = [S(train,:);loglambda(jj).*L];
+      constraints = [S(train,rfInds{unitChannel(zz)});loglambda(jj).*L];
       fhat = constraints\r;fhat = full(fhat);
-      fhat = fhat(~edgeInds);
       
       % fit sigmoid nonlinearity
-      result = S(train,~edgeInds)*fhat;
+      result = S(train,rfInds{unitChannel(zz)})*fhat;
       myFun = @(x) x(1)./(1+exp(-(result-x(2)).*x(3)))+x(4)-spikeTrain(train);
       x0 = [5,0.5,10,baseRate];
       lb = [0,0,0,0];ub = [5e2,Inf,Inf,Inf];
@@ -391,7 +387,7 @@ for zz=1:totalUnits
       tempSigmoid(jj,:) = sigmoidParams;
       
       % calculate held-out Poisson deviance
-      temp = S(test,~edgeInds)*fhat;
+      temp = S(test,rfInds{unitChannel(zz)})*fhat;
       temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
       
       initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
@@ -399,11 +395,11 @@ for zz=1:totalUnits
       tempDev(jj,1) = 2*sum(initialDev);
       
       % rotate the receptive field and recalculate the held-out deviance
-      rf = reshape(fhat,[DIM(1)-2,DIM(2)-2]);
+      rf = reshape(fhat,[newDims(unitChannel(zz),1),newDims(unitChannel(zz),2)]);
       for kk=2:4
         rf = imrotate(rf,90);
         tempfhat = rf(:);
-        temp = S(test,~edgeInds)*tempfhat;
+        temp = S(test,rfInds{unitChannel(zz)})*tempfhat;
         temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
         
         initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
@@ -414,7 +410,7 @@ for zz=1:totalUnits
   
    [~,bestMap] = min(tempDev(:,1));
    fprintf('Best Map: %d\n',bestMap);
-   F(zz,:) = tempF(bestMap,:);
+   F{zz} = tempF(bestMap,:);
    bestLambda(zz) = loglambda(bestMap);
    heldOutDeviance(zz,1:4) = tempDev(bestMap,:);
    sigmoidNonlin(zz,:) = tempSigmoid(bestMap,:);
@@ -431,7 +427,7 @@ for zz=1:totalUnits
    fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
    
    if heldOutExplainedVariance(zz,1) >= 0.02
-      figure();imagesc(reshape(fhat,[DIM(1)-2,DIM(2)-2]));
+      figure();imagesc(reshape(fhat,[newDims(unitChannel(zz),1),newDims(unitChannel(zz),2)]));
       title(sprintf('%s',EphysFileName(1:end-9)));
    end
    
@@ -450,7 +446,8 @@ save(fileName,'F','totalUnits','bestLambda',...
     'reducedSpikeCount','DIM','S','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
     'svStrobed','heldOutDeviance','numStimuli','sigmoidNonlin',...
-    'heldOutExplainedVariance','STA','beta');
+    'heldOutExplainedVariance','STA','beta','centerPositions','rfInds',...
+    'newDims','unitChannel');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
@@ -517,19 +514,31 @@ sigmoidParams = paramVec(:,ind);
 
 end
 
-function [centerPositions] = GetRetinoMap(AnimalName)
+function [centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis)
 cd ~/CloudStation/ByronExp/Retino/
 fileName = strcat('RetinoMapBayes*',num2str(AnimalName),'.mat');
 files = dir(fileName);
 
 load(files(end).name);
 
-x = 1:2:w_pixels;y=1:2:h_pixels;
-[X,Y] = meshgrid(x,y);
+[numChans,~,numSamples] = size(posteriorSample);
+
+x = 1:w_pixels;y=1:h_pixels;
+[X,Y] = meshgrid(x,y); 
+
+xpix = linspace(-round(w_pixels/2)+1,...
+    round(w_pixels/2),w_pixels);
+ypix = linspace(round(3*h_pixels/4),...
+    -round(h_pixels/4)+1,h_pixels);
+
+% we want final RF to be ~1000 by 1000 screen pixels, about 50 degrees
+%  of visual arc on a side
 
 centerPositions = zeros(numChans,2);
+rfInds = cell(numChans,1);
+newDims = zeros(numChans,2);
 for ii=1:numChans
-    finalIm = zeros(length(x),length(y));
+    finalIm = zeros(length(y),length(x));
     samples = squeeze(posteriorSample(ii,:,:));
     N = 1000;
     for ll=1:N
@@ -552,8 +561,22 @@ for ii=1:numChans
     finalIm = finalIm./N;
     [~,maxInd] = max(finalIm(:));
     [row,col] = ind2sub(size(finalIm),maxInd);
-    centerPositions(ii,1) = row;
-    centerPositions(ii,2) = col;
+    centerPositions(ii,1) = col;
+    centerPositions(ii,2) = row;
+    
+    centerX = xpix(col);centerY = ypix(length(ypix)-row+1);
+    xLow = centerX-500;xHigh = centerX+500;
+    yLow = centerY-500;yHigh = centerY+500;
+    
+    [~,xLow] = min(abs(xLow-xaxis));
+    [~,xHigh] = min(abs(xHigh-xaxis));
+    [~,yLow] = min(abs(yLow-yaxis));
+    [~,yHigh] = min(abs(yHigh-yaxis));
+    tempIm = zeros(length(yaxis),length(xaxis));
+    tempIm(yHigh:yLow,xLow:xHigh) = 1;
+    rfInds{ii} = find(tempIm==1);
+    newDims(ii,1) = yLow-yHigh+1;
+    newDims(ii,2) = xHigh-xLow+1;
 end
 
 
