@@ -194,11 +194,11 @@ end
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM allts strobeData xaxis yaxis ...
     X Y totalMillisecs reducedMov movement svStrobed S ...
-    test train beta AnimalName unitChannel;
+    test train beta AnimalName unitChannel numChans;
 
 
 % get expected location of RF based on LFP receptive region mapping
-[centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis);
+[centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans);
 
 % GLM with Gaussian basis functions
 % fullSize = DIM(1)*DIM(2);
@@ -307,38 +307,38 @@ for zz=1:totalUnits
            tempMat = zeros(newDims(unitChannel(zz),1),newDims(unitChannel(zz),2));
            
            if ii==1 && jj==1
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 2;
                tempMat(ii+1,jj) = -1;
                tempMat(ii,jj+1) = -1;
            elseif ii==newDims(unitChannel(zz),1) && jj==1
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 2;
                tempMat(ii-1,jj) = -1;
                tempMat(ii,jj+1) = -1;
            elseif ii==1 && jj==newDims(unitChannel(zz),2)
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 2;
                tempMat(ii,jj-1) = -1;
                tempMat(ii+1,jj) = -1;
            elseif ii == newDims(unitChannel(zz),1) && jj == newDims(unitChannel(zz),2)
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 2;
                tempMat(ii-1,jj) = -1;
                tempMat(ii,jj-1) = -1;
            elseif ii==1
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 3;
                tempMat(ii,jj-1) = -1;
                tempMat(ii+1,jj) = -1;
                tempMat(ii,jj+1) = -1;
            elseif jj==1
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 3;
                tempMat(ii-1,jj) = -1;
                tempMat(ii,jj+1) = -1;
                tempMat(ii+1,jj) = -1;
            elseif ii==newDims(unitChannel(zz),1)
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 3;
                tempMat(ii-1,jj) = -1;
                tempMat(ii,jj-1) = -1;
                tempMat(ii,jj+1) = -1;
            elseif jj==newDims(unitChannel(zz),2)
-               tempMat(ii,jj) = 4;
+               tempMat(ii,jj) = 3;
                tempMat(ii-1,jj) = -1;
                tempMat(ii+1,jj) = -1;
                tempMat(ii,jj-1) = -1;
@@ -514,71 +514,82 @@ sigmoidParams = paramVec(:,ind);
 
 end
 
-function [centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis)
+function [centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans)
 cd ~/CloudStation/ByronExp/Retino/
 fileName = strcat('RetinoMapBayes*',num2str(AnimalName),'.mat');
 files = dir(fileName);
 
-load(files(end).name);
-
-[numChans,~,numSamples] = size(posteriorSample);
-
-x = 1:w_pixels;y=1:h_pixels;
-[X,Y] = meshgrid(x,y); 
-
-xpix = linspace(-round(w_pixels/2)+1,...
-    round(w_pixels/2),w_pixels);
-ypix = linspace(round(3*h_pixels/4),...
-    -round(h_pixels/4)+1,h_pixels);
-
-% we want final RF to be ~1000 by 1000 screen pixels, about 50 degrees
-%  of visual arc on a side
-
-centerPositions = zeros(numChans,2);
-rfInds = cell(numChans,1);
-newDims = zeros(numChans,2);
-for ii=1:numChans
-    finalIm = zeros(length(y),length(x));
-    samples = squeeze(posteriorSample(ii,:,:));
-    N = 1000;
-    for ll=1:N
-        index = random('Discrete Uniform',numSamples);
-        parameterVec = samples(:,index);
-        b = [parameterVec(1),parameterVec(4),parameterVec(5),parameterVec(6)];
-        distX = X-parameterVec(2);distY = Y-parameterVec(3);
-        finalIm = finalIm+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
-                     (distY.^2)./(2*b(3)*b(3)))+b(4);
-%         for jj=1:length(x)
-%             for kk=1:length(y)
-%                 distX = x(jj)-parameterVec(2);
-%                 distY = y(kk)-parameterVec(3);
-%                 
-%                 finalIm(jj,kk) = finalIm(jj,kk)+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
-%                     (distY.^2)./(2*b(3)*b(3)))+b(4);
-%             end
-%         end
+if isempty(files)==1
+    centerPositions = zeros(numChans,2);
+    rfInds = cell(numChans,1);
+    newDims = zeros(numChans,2);
+    for ii=1:numChans
+        tempIm = ones(length(yaxis),length(xaxis));
+        rfInds{ii} = find(tempIm==1);
+        newDims(ii,1) = length(yaxis);
+        newDims(ii,2) = length(xaxis);
     end
-    finalIm = finalIm./N;
-    [~,maxInd] = max(finalIm(:));
-    [row,col] = ind2sub(size(finalIm),maxInd);
-    centerPositions(ii,1) = col;
-    centerPositions(ii,2) = row;
+else
+    load(files(end).name);
     
-    centerX = xpix(col);centerY = ypix(length(ypix)-row+1);
-    xLow = centerX-500;xHigh = centerX+500;
-    yLow = centerY-500;yHigh = centerY+500;
+    [numChans,~,numSamples] = size(posteriorSample);
     
-    [~,xLow] = min(abs(xLow-xaxis));
-    [~,xHigh] = min(abs(xHigh-xaxis));
-    [~,yLow] = min(abs(yLow-yaxis));
-    [~,yHigh] = min(abs(yHigh-yaxis));
-    tempIm = zeros(length(yaxis),length(xaxis));
-    tempIm(yHigh:yLow,xLow:xHigh) = 1;
-    rfInds{ii} = find(tempIm==1);
-    newDims(ii,1) = yLow-yHigh+1;
-    newDims(ii,2) = xHigh-xLow+1;
+    x = 1:w_pixels;y=1:h_pixels;
+    [X,Y] = meshgrid(x,y);
+    
+    xpix = linspace(-round(w_pixels/2)+1,...
+        round(w_pixels/2),w_pixels);
+    ypix = linspace(round(3*h_pixels/4),...
+        -round(h_pixels/4)+1,h_pixels);
+    
+    % we want final RF to be ~1000 by 1000 screen pixels, about 50 degrees
+    %  of visual arc on a side
+    
+    centerPositions = zeros(numChans,2);
+    rfInds = cell(numChans,1);
+    newDims = zeros(numChans,2);
+    for ii=1:numChans
+        finalIm = zeros(length(y),length(x));
+        samples = squeeze(posteriorSample(ii,:,:));
+        N = 1000;
+        for ll=1:N
+            index = random('Discrete Uniform',numSamples);
+            parameterVec = samples(:,index);
+            b = [parameterVec(1),parameterVec(4),parameterVec(5),parameterVec(6)];
+            distX = X-parameterVec(2);distY = Y-parameterVec(3);
+            finalIm = finalIm+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
+                (distY.^2)./(2*b(3)*b(3)))+b(4);
+            %         for jj=1:length(x)
+            %             for kk=1:length(y)
+            %                 distX = x(jj)-parameterVec(2);
+            %                 distY = y(kk)-parameterVec(3);
+            %
+            %                 finalIm(jj,kk) = finalIm(jj,kk)+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
+            %                     (distY.^2)./(2*b(3)*b(3)))+b(4);
+            %             end
+            %         end
+        end
+        finalIm = finalIm./N;
+        [~,maxInd] = max(finalIm(:));
+        [row,col] = ind2sub(size(finalIm),maxInd);
+        centerPositions(ii,1) = col;
+        centerPositions(ii,2) = row;
+        
+        centerX = xpix(col);centerY = ypix(length(ypix)-row+1);
+        xLow = centerX-500;xHigh = centerX+500;
+        yLow = centerY-500;yHigh = centerY+500;
+        
+        [~,xLow] = min(abs(xLow-xaxis));
+        [~,xHigh] = min(abs(xHigh-xaxis));
+        [~,yLow] = min(abs(yLow-yaxis));
+        [~,yHigh] = min(abs(yHigh-yaxis));
+        tempIm = zeros(length(yaxis),length(xaxis));
+        tempIm(yHigh:yLow,xLow:xHigh) = 1;
+        rfInds{ii} = find(tempIm==1);
+        newDims(ii,1) = yLow-yHigh+1;
+        newDims(ii,2) = xHigh-xLow+1;
+    end
 end
-
 
 cd ~/CloudStation/ByronExp/NoiseRetino/
 
