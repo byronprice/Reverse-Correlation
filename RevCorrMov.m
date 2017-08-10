@@ -26,7 +26,7 @@ function [] = RevCorrMov(AnimalName,Date,NoiseType)
 %
 % Created: 2016/04/29, Commuter Rail Boston to Providence
 %  Byron Price
-% Updated: 2017/07/11
+% Updated: 2017/08/09
 % By: Byron Price
 
 %cd('~/CloudStation/ByronExp/NoiseRetino');
@@ -60,8 +60,9 @@ xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
     round(screenPix_to_effPix*DIM(2)/2),DIM(2));
 yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
     -round(screenPix_to_effPix*DIM(1)/4)+1,DIM(1));
+taxis = 300:16:-40;
 
-[X,Y] = meshgrid(xaxis,yaxis);
+[X,Y,T] = meshgrid(xaxis,yaxis,taxis);
 
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
@@ -83,11 +84,7 @@ allts = temp;
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-if length(strobeData) ~= numStimuli && length(unique(svStrobed)) == 1
-    strobeData = strobeData(1:2:end);
-elseif length(unique(svStrobed)) == 3
-    strobeData = strobeData(svStrobed==1);
-end
+strobeData = strobeData(strobeData>0);
 
 % GATHER LFP AND MOVEMENT DATA
 nonEmptyAD = ~cellfun(@isempty,allad);
@@ -114,7 +111,7 @@ if isempty(allad{49}) == 0
     tempMov = conv(abs(movement),ones(adfreq/2,1),'same');
     tempMov = tempMov-mean(tempMov);
     stdEst = 1.4826*mad(tempMov,1);
-    movement = single(tempMov>(3*stdEst));
+    movement = logical(tempMov>(3*stdEst));
     clear tempMov stdEst;
 else
     movement = zeros(length(LFP{1}),1);
@@ -125,10 +122,6 @@ timeMultiplier = 1000;
 totalMillisecs = round(totalTime*timeMultiplier);
 
 stimTimes = round(strobeData.*timeMultiplier);
-
-if exist('flipIntervals','var')==1
-    flipInterval = mean(flipIntervals);
-end
 
 pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 
