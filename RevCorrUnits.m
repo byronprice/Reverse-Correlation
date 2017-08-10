@@ -292,7 +292,6 @@ for zz=1:totalUnits
    visualResponsiveness(zz,2) = pVal<0.01;
    
    if visualResponsiveness(zz,2) == 1
-   
        spikeTrain = sum(spikeTrain(:,50:150),2);
        
        % PCA solution
@@ -319,6 +318,7 @@ for zz=1:totalUnits
        bigCount = 1;
        for jj=1:newDims(unitChannel(zz),2)
            for ii=1:newDims(unitChannel(zz),1)
+
                tempMat = zeros(newDims(unitChannel(zz),1),newDims(unitChannel(zz),2));
                
                if ii==1 && jj==1
