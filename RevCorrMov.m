@@ -44,26 +44,6 @@ StimulusFileName = strcat('NoiseMovieStim',NoiseType,num2str(Date),'_',num2str(A
 load(EphysFileName,'nunits1','allts','adfreq','allad','svStrobed','tsevs')
 load(StimulusFileName)
 
-% gaborFun = @(x,y,B,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
-%     B.*exp(-((x-xc).*cos(A)-(y-yc).*sin(A)).^2./(2*sigmax*sigmax)-...
-%     ((x-xc).*sin(A)+(y-yc).*cos(A)).^2/(2*sigmay*sigmay))...
-%     .*sin((2*pi.*spatFreq).*(cos(theta-pi/2).*(x-xc)-sin(theta-pi/2).*(y-yc))-phi);
-% 
-% %nonLinFun = @(x,baseX,scale) exp((x-baseX)/scale);
-% nonLinFun = @(x,base,slope,rise) rise./(1+exp(-(x-base).*slope));
-%nonLinFun = @(x,slope,intercept) max(0,slope.*x+intercept);
-
-% horzDegrees = atan((screenPix_to_effPix*DIM(1)*conv_factor/10)/DistToScreen);
-% vertDegrees = atan((screenPix_to_effPix*DIM(2)*conv_factor/10)/DistToScreen);
-    
-xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
-    round(screenPix_to_effPix*DIM(2)/2),DIM(2));
-yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
-    -round(screenPix_to_effPix*DIM(1)/4)+1,DIM(1));
-taxis = 300:16:-40;
-
-[X,Y,T] = meshgrid(xaxis,yaxis,taxis);
-
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
@@ -84,7 +64,9 @@ allts = temp;
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-strobeData = strobeData(strobeData>0);
+strobeData = strobeData(svStrobed>0 & svStrobed<254);
+
+forMovStrobed = svStrobed(svStrobed>0 & svStrobed<254);
 
 % GATHER LFP AND MOVEMENT DATA
 nonEmptyAD = ~cellfun(@isempty,allad);
@@ -128,82 +110,400 @@ pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 for ii=1:totalUnits
    spikeTimes = max(1,round(allts{ii}.*timeMultiplier));
    for jj=1:length(spikeTimes)
-      pointProcessSpikes(spikeTimes(jj),ii) = 1;
+      pointProcessSpikes(spikeTimes(jj),ii) = pointProcessSpikes(spikeTimes(jj),ii)+1;
    end
 end
 
-reducedMov = zeros(numStimuli,1*timeMultiplier);
-reducedSpikeCount = zeros(totalUnits,numStimuli,1*timeMultiplier);
-for ii=1:totalUnits
-    for jj=1:numStimuli
-        timeInds = stimTimes(jj):stimTimes(jj)+1*timeMultiplier-1;
-        reducedSpikeCount(ii,jj,:) = pointProcessSpikes(timeInds,ii)';
-        reducedMov(jj,:) = movement(timeInds);
+temp = randperm(numMoviesToDisplay);
+divide = round(0.7*numMoviesToDisplay);
+train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
+
+movieLen = movie_FrameRate*movieTime_Seconds-1*movie_FrameRate;
+
+load(sprintf('%sMovie1.mat',movieType),'DIM');
+
+xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
+    round(screenPix_to_effPix*DIM(2)/2),DIM(2));
+yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
+    -round(screenPix_to_effPix*DIM(1)/4)+1,DIM(1));
+taxis = linspace(300,50,16);
+
+
+movieIndices = zeros(movieLen*numMoviesToDisplay,length(taxis));
+movieFrames = zeros(movieLen*numMoviesToDisplay,DIM(1)*DIM(2),'uint8');
+reducedSpikeCount = zeros(totalUnits,movieLen*numMoviesToDisplay);
+reducedMov = zeros(movieLen*numMoviesToDisplay,1);
+
+count = 1;
+for ii=1:numMoviesToDisplay
+    index = movieNums(ii);
+    fileName = sprintf('%sMovie%d.mat',movieType,index);
+    load(fileName,'S');
+    for jj=1:movieLen
+        temp = S(:,:,jj+movie_FrameRate);
+        movieFrames(count,:) = temp(:);
+        movieIndices(count,:) = count:(count+length(taxis)-1);
+        for kk=1:totalUnits
+            reducedSpikeCount(kk,count) = 0;
+            
+        end
+        count = count+1;
     end
 end
 
 clearvars -except EphysFileName totalUnits numStimuli ...
-    reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis ...
-    X Y totalMillisecs reducedMov movement;
+    reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis taxis...
+    totalJiffysecs reducedMov movement AnimalName numChans movieIndices ...
+    movieFrames;
 
-fullSize = DIM(1)*DIM(2);
-basisStdDevs = [200,300,400,450,500,550,600,650,700,750,1000];
-numStdDevs = length(basisStdDevs);
+% REGULARIZED PSEUDO-INVERSE SOLUTION, CREATE CONVOLUTION MATRIX L
+[centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans)
+S = double(S);
 
-finalResultsPoissonB = cell(totalUnits,numStdDevs);
-finalResultsPoissonDev = cell(totalUnits,numStdDevs);
-finalResultsPoissonSE = cell(totalUnits,numStdDevs);
-finalResultsNormalB = cell(totalUnits,numStdDevs);
-finalResultsNormalDev = cell(totalUnits,numStdDevs);
-finalResultsNormalSE = cell(totalUnits,numStdDevs);
+warning('off','all');
+
+numLambda = 50;
+loglambda = logspace(1,7,numLambda);
+F = cell(totalUnits,1);
+STA = zeros(totalUnits,DIM(1)*DIM(2));
+
+bestLambda = zeros(totalUnits,1);
+heldOutDeviance = zeros(totalUnits,5);
+heldOutExplainedVariance = zeros(totalUnits,1);
+sigmoidNonlin = zeros(totalUnits,4);
+visualResponsiveness = zeros(totalUnits,2);
 for zz=1:totalUnits
+   fprintf('Running unit %d ...\n',zz);
    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
-   spikeTrain = sum(spikeTrain(:,50:500),2);
-   movDesign = sum(reducedMov(:,50:500),2);
    
-   %    r = spikeTrain;
-   %    fhat = unbiasedS\r;
-   gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
-       ((y-yc).*(y-yc))./(2*std*std));
+   baseRate = sum(sum(spikeTrain(:,51:400)))./(numStimuli*0.35);
    
-   center1 = xaxis(1:3:end);
-   center2 = yaxis(1:3:end);
-   numBasis1 = length(center1);
-   numBasis2 = length(center2);
-   totalParams = numBasis1*numBasis2;
+   y = [sum(spikeTrain(:,51:150),2);sum(spikeTrain(:,901:1000),2)];
+   design1 = ones(2*numStimuli,1);
+   design2 = [[ones(numStimuli,1);zeros(numStimuli,1)],...
+       [zeros(numStimuli,1);ones(numStimuli,1)]];
+   [~,dev1,~] = glmfit(design1,y,'poisson','constant','off');
+   [~,dev2,~] = glmfit(design2,y,'poisson','constant','off');
+   dfDiff = 1;
+   pVal = chi2cdf(dev1-dev2,dfDiff,'upper');
+   visualResponsiveness(zz,1) = pVal;
+   visualResponsiveness(zz,2) = pVal<0.01;
    
-   basisFuns = zeros(fullSize,totalParams);
-   for stddev = 1:numStdDevs
-       count = 1;
-       for ii=1:numBasis1
-           for jj=1:numBasis2
-               temp = gaussFun(X,Y,center1(ii),center2(jj),basisStdDevs(stddev));
-               basisFuns(:,count) = temp(:)./max(temp(:));
-               count = count+1;
+   if visualResponsiveness(zz,2) == 1
+       spikeTrain = sum(spikeTrain(:,50:150),2);
+       
+       % PCA solution
+       %    [V,D] = eig(cov(S));
+       %    eigenvals = diag(D);
+       %    start = find(eigenvals>10,1,'first');
+       %    q = size(eigenvals(start:end),1);
+       %    meanEig = mean(eigenvals(1:start-1));
+       %    W = V(:,start:end)*sqrtm(D(start:end,start:end)-meanEig.*eye(q));
+       %    W = fliplr(W);
+       %    Winv = pinv(W);
+       %    x = zeros(q,numStimuli);
+       %    for ii=1:numStimuli
+       %       x(:,ii) = Winv*(S(ii,:)'-127);
+       %    end
+       %    x = x';
+       %    fhat = x(train,:)\spikeTrain(train); % then proceed as usual, with no smoothing
+       
+       % GET SMALLER SECTION OF IMAGE DISPLAYED ON THE SCREEN
+       fullSize = newDims(unitChannel(zz),1)*newDims(unitChannel(zz),2);
+       L = sparse(fullSize,fullSize);
+       
+       %operator = [0,-1,0;-1,4,-1;0,-1,0];
+       bigCount = 1;
+       for jj=1:newDims(unitChannel(zz),2)
+           for ii=1:newDims(unitChannel(zz),1)
+
+               tempMat = zeros(newDims(unitChannel(zz),1),newDims(unitChannel(zz),2));
+               
+               if ii==1 && jj==1
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii+1,jj) = -4/2;
+                   tempMat(ii,jj+1) = -4/2;
+               elseif ii==newDims(unitChannel(zz),1) && jj==1
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/2;
+                   tempMat(ii,jj+1) = -4/2;
+               elseif ii==1 && jj==newDims(unitChannel(zz),2)
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii,jj-1) = -4/2;
+                   tempMat(ii+1,jj) = -4/2;
+               elseif ii == newDims(unitChannel(zz),1) && jj == newDims(unitChannel(zz),2)
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/2;
+                   tempMat(ii,jj-1) = -4/2;
+               elseif ii==1
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii,jj-1) = -4/3;
+                   tempMat(ii+1,jj) = -4/3;
+                   tempMat(ii,jj+1) = -4/3;
+               elseif jj==1
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/3;
+                   tempMat(ii,jj+1) = -4/3;
+                   tempMat(ii+1,jj) = -4/3;
+               elseif ii==newDims(unitChannel(zz),1)
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/3;
+                   tempMat(ii,jj-1) = -4/3;
+                   tempMat(ii,jj+1) = -4/3;
+               elseif jj==newDims(unitChannel(zz),2)
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/3;
+                   tempMat(ii+1,jj) = -4/3;
+                   tempMat(ii,jj-1) = -4/3;
+               else
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -1;
+                   tempMat(ii+1,jj) = -1;
+                   tempMat(ii,jj+1) = -1;
+                   tempMat(ii,jj-1) = -1;
+               end
+               L(bigCount,:) = tempMat(:)';bigCount = bigCount+1;
+               %         imagesc(tempMat);caxis([-1 4]);pause(0.1);
            end
        end
-       design = [movDesign,unbiasedS*basisFuns];
-       [bPoiss,devPoiss,statsPoiss] = glmfit(design,spikeTrain,'poisson');
-       finalResultsPoissonB{zz,stddev} = bPoiss;
-       finalResultsPoissonDev{zz,stddev} = devPoiss;
-       finalResultsPoissonSE{zz,stddev} = statsPoiss.se;
        
-       [b,dev,stats] = glmfit(design,spikeTrain);
-       finalResultsNormalB{zz,stddev} = b;
-       finalResultsNormalDev{zz,stddev} = dev;
-       finalResultsNormalSE{zz,stddev} = stats.se;
+       r = [spikeTrain(train);sparse(fullSize,1)];
        
-       clear bPoiss devPoiss statsPoiss b dev stats count design;
+       tempF = zeros(numLambda,fullSize);
+       tempSigmoid = zeros(numLambda,4);
+       tempDev = zeros(numLambda,4);
+       %    allOnesTrain = ones(length(train),1);
+       %    allOnesTest = ones(length(test),1);
+       for jj=1:numLambda
+           % calculate regularized pseudoinverse solution
+           constraints = [S(train,rfInds{unitChannel(zz)});loglambda(jj).*L];
+           fhat = constraints\r;fhat = full(fhat);
+           
+           % fit sigmoid nonlinearity
+           result = S(train,rfInds{unitChannel(zz)})*fhat;
+           myFun = @(x) x(1)./(1+exp(-(result-x(2)).*x(3)))+x(4)-spikeTrain(train);
+           x0 = [5,0.5,10,baseRate];
+           lb = [0,0,0,0];ub = [5e2,Inf,Inf,Inf];
+           %       options.Algorithm = 'levenberg-marquardt';
+           %options.MaxFunctionEvaluations = 1000;
+           options = optimoptions(@lsqnonlin,'MaxIterations',1000);
+           options.Display = 'off';
+           sigmoidParams = lsqnonlin(myFun,x0,lb,ub,options);
+           
+           temp = sigmoidParams(1)./(1+exp(-(result-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
+           initialDev = spikeTrain(train).*log(spikeTrain(train)./temp)-(spikeTrain(train)-temp);
+           initialDev(isnan(initialDev) | isinf(initialDev)) = temp(isnan(initialDev) | isinf(initialDev));
+           sigmoidParams = FitSigmoid(sigmoidParams,2*sum(initialDev),spikeTrain(train),result);
+           
+           % save parameters
+           tempF(jj,:) = fhat;
+           tempSigmoid(jj,:) = sigmoidParams;
+           
+           % calculate held-out Poisson deviance
+           temp = S(test,rfInds{unitChannel(zz)})*fhat;
+           temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
+           
+           initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
+           initialDev(isnan(initialDev) | isinf(initialDev)) = temp(isnan(initialDev) | isinf(initialDev));
+           tempDev(jj,1) = 2*sum(initialDev);
+           
+           % rotate the receptive field and recalculate the held-out deviance
+           rf = reshape(fhat,[newDims(unitChannel(zz),1),newDims(unitChannel(zz),2)]);
+           for kk=2:4
+               rf = imrotate(rf,90);
+               tempfhat = rf(:);
+               temp = S(test,rfInds{unitChannel(zz)})*tempfhat;
+               temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
+               
+               initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
+               initialDev(isnan(initialDev) | isinf(initialDev)) = temp(isnan(initialDev) | isinf(initialDev));
+               tempDev(jj,kk) = 2*sum(initialDev);
+           end
+       end
+       
+       [~,bestMap] = min(tempDev(:,1));
+       fprintf('Best Map: %d\n',bestMap);
+       F{zz} = tempF(bestMap,:);
+       bestLambda(zz) = loglambda(bestMap);
+       heldOutDeviance(zz,1:4) = tempDev(bestMap,:);
+       sigmoidNonlin(zz,:) = tempSigmoid(bestMap,:);
+       
+       % get held-out deviance of model with single regressor
+       [~,dev,~] = glmfit(ones(length(test),1),spikeTrain(test),'poisson','constant','off');
+       heldOutDeviance(zz,5) = dev;
+       
+       % get held-out explained variance
+       %  see R-squared measures for Count Data Regression Models
+       %   A. Colin Cameron & Frank A.G. Windmeijer April 1995
+       %   Journal of Business and Economic Statistics
+       heldOutExplainedVariance(zz,1) = 1-tempDev(bestMap,1)/dev;
+       fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
+       
+       if heldOutExplainedVariance(zz,1) >= 0.05
+           figure();imagesc(reshape(fhat,[newDims(unitChannel(zz),1),newDims(unitChannel(zz),2)]));
+           title(sprintf('%s',EphysFileName(1:end-9)));
+       end
+       
+       totalSpikes = sum(spikeTrain);
+       for ii=1:numStimuli
+           if spikeTrain(ii) > 0
+               STA(zz,:) = STA(zz,:)+S(ii,:).*(spikeTrain(ii)/totalSpikes);
+           end
+       end
    end
-   clear spikeTrain movDesign basisFuns center1 center2 numBasis1 numBasis2 totalParams;
 end
 
-fileName = strcat(EphysFileName(1:end-9),'-GLMResults.mat');
-save(fileName,'finalResultsNormalB','finalResultsPoissonB',...
-    'finalResultsNormalDev','finalResultsPoissonDev',...
-    'finalResultsNormalSE','finalResultsPoissonSE','allts','totalUnits',...
-    'reducedSpikeCount','DIM','unbiasedS','movement',...
-    'xaxis','yaxis','basisStdDevs','reducedMov');
-%cd('~/Documents/Current-Projects/Reverse-Correlation');
+% save the results
+fileName = strcat(EphysFileName(1:end-9),'-PseudoInvResults.mat');
+save(fileName,'F','totalUnits','bestLambda',...
+    'reducedSpikeCount','DIM','S','movement',...
+    'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
+    'svStrobed','heldOutDeviance','numStimuli','sigmoidNonlin',...
+    'heldOutExplainedVariance','STA','beta','centerPositions','rfInds',...
+    'newDims','unitChannel','visualResponsiveness');
+
+% REVERSE CORRELATION SOLUTION
+% for ii=1:numChans
+%     numNeurons = Neurons(ii,1);
+%     figure();plotRows = ceil(numNeurons/2);
+%     for jj=1:numNeurons
+%         r = squeeze(Response(ii,jj,:));
+% % %         r = newS*f
+%         fhat = newS\r;
+%         F(ii,jj,:) = fhat;
+%         subplot(plotRows,2,jj);imagesc(reshape(fhat,[N,N]));
+%         title(sprintf('RevCorr: Chan %d, Unit %d, Animal %d',ii,jj,AnimalName));
+%     end
+% end
+% Img = reshape(S(tt,:),[minPix/screenPix_to_effPix,minPix/screenPix_to_effPix]);
+% Img = kron(double(Img),ones(screenPix_to_effPix));
+
+end
+
+function [sigmoidParams] = FitSigmoid(sigmoidParams,initialDev,spikeTrain,result)
+N = 1e5;
+numParams = length(sigmoidParams);
+paramVec = zeros(numParams,N);
+devVec = zeros(N,1);
+
+variance = 0.01;
+
+paramVec(:,1) = sigmoidParams';
+devVec(1) = initialDev;
+
+W = diag(ones(numParams,1));
+loglambda = log(2.38^2)*ones(numParams,1);
+optimalAccept = 0.44;
+for ii=2:N
+    index = random('Discrete Uniform',numParams);
+    
+    pStar = paramVec(:,ii-1)+W(:,index).*normrnd(0,sqrt(exp(loglambda(index))*variance));
+    
+    if sum(pStar<=0) == 0
+        temp = pStar(1)./(1+exp(-(result-pStar(2)).*pStar(3)))+pStar(4);
+        
+        pDev = spikeTrain.*log(spikeTrain./temp)-(spikeTrain-temp);
+        pDev(isnan(pDev) | isinf(pDev)) = temp(isnan(pDev) | isinf(pDev));
+        
+        logA = devVec(ii-1) - 2*sum(pDev);
+        if log(rand) < logA
+           paramVec(:,ii) = pStar;
+           devVec(ii) = 2*sum(pDev);
+        else
+            paramVec(:,ii) = paramVec(:,ii-1);
+            devVec(ii) = devVec(ii-1);
+            
+        end
+        loglambda(index) = loglambda(index)+0.01*(exp(min(0,logA))-optimalAccept);
+    else
+       loglambda(index) = loglambda(index)+0.01*(-optimalAccept);
+       paramVec(:,ii) = paramVec(:,ii-1);
+       devVec(ii) = devVec(ii-1);      
+    end
+end
+
+[~,ind] = min(devVec);
+sigmoidParams = paramVec(:,ind);
+
+end
+
+function [centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans)
+cd ~/CloudStation/ByronExp/Retino/
+fileName = strcat('RetinoMapBayes*',num2str(AnimalName),'.mat');
+files = dir(fileName);
+
+if isempty(files)==1
+    centerPositions = zeros(numChans,2);
+    rfInds = cell(numChans,1);
+    newDims = zeros(numChans,2);
+    for ii=1:numChans
+        tempIm = ones(length(yaxis),length(xaxis));
+        rfInds{ii} = find(tempIm==1);
+        newDims(ii,1) = length(yaxis);
+        newDims(ii,2) = length(xaxis);
+    end
+else
+    load(files(end).name);
+    
+    [numChans,~,numSamples] = size(posteriorSample);
+    
+    x = 1:w_pixels;y=1:h_pixels;
+    [X,Y] = meshgrid(x,y);
+    
+    xpix = linspace(-round(w_pixels/2)+1,...
+        round(w_pixels/2),w_pixels);
+    ypix = linspace(round(3*h_pixels/4),...
+        -round(h_pixels/4)+1,h_pixels);
+    
+    % we want final RF to be ~1200 by 1200 screen pixels, about 50 degrees
+    %  of visual arc on a side
+    
+    centerPositions = zeros(numChans,2);
+    rfInds = cell(numChans,1);
+    newDims = zeros(numChans,2);
+    for ii=1:numChans
+        finalIm = zeros(length(y),length(x));
+        samples = squeeze(posteriorSample(ii,:,:));
+        N = 1000;
+        for ll=1:N
+            index = random('Discrete Uniform',numSamples);
+            parameterVec = samples(:,index);
+            b = [parameterVec(1),parameterVec(4),parameterVec(5),parameterVec(6)];
+            distX = X-parameterVec(2);distY = Y-parameterVec(3);
+            finalIm = finalIm+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
+                (distY.^2)./(2*b(3)*b(3)))+b(4);
+            %         for jj=1:length(x)
+            %             for kk=1:length(y)
+            %                 distX = x(jj)-parameterVec(2);
+            %                 distY = y(kk)-parameterVec(3);
+            %
+            %                 finalIm(jj,kk) = finalIm(jj,kk)+b(1)*exp(-(distX.^2)./(2*b(2)*b(2))-...
+            %                     (distY.^2)./(2*b(3)*b(3)))+b(4);
+            %             end
+            %         end
+        end
+        finalIm = finalIm./N;
+        [~,maxInd] = max(finalIm(:));
+        [row,col] = ind2sub(size(finalIm),maxInd);
+        centerPositions(ii,1) = col;
+        centerPositions(ii,2) = row;
+        
+        centerX = xpix(col);centerY = ypix(length(ypix)-row+1);
+        xLow = centerX-600;xHigh = centerX+600;
+        yLow = centerY-600;yHigh = centerY+600;
+        
+        [~,xLow] = min(abs(xLow-xaxis));
+        [~,xHigh] = min(abs(xHigh-xaxis));
+        [~,yLow] = min(abs(yLow-yaxis));
+        [~,yHigh] = min(abs(yHigh-yaxis));
+        tempIm = zeros(length(yaxis),length(xaxis));
+        tempIm(yHigh:yLow,xLow:xHigh) = 1;
+        rfInds{ii} = find(tempIm==1);
+        newDims(ii,1) = yLow-yHigh+1;
+        newDims(ii,2) = xHigh-xLow+1;
+    end
+end
+
+cd ~/CloudStation/ByronExp/NoiseRetino/
 
 end

@@ -99,7 +99,7 @@ if exist('test','var') == 1 && exist('train','var') == 1
 else
     % divide data into training and test
    temp = randperm(numStimuli);
-   divide = round(0.75*numStimuli);
+   divide = round(0.7*numStimuli);
    train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
 end
 
@@ -322,41 +322,41 @@ for zz=1:totalUnits
                tempMat = zeros(newDims(unitChannel(zz),1),newDims(unitChannel(zz),2));
                
                if ii==1 && jj==1
-                   tempMat(ii,jj) = 2;
-                   tempMat(ii+1,jj) = -1;
-                   tempMat(ii,jj+1) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii+1,jj) = -4/2;
+                   tempMat(ii,jj+1) = -4/2;
                elseif ii==newDims(unitChannel(zz),1) && jj==1
-                   tempMat(ii,jj) = 2;
-                   tempMat(ii-1,jj) = -1;
-                   tempMat(ii,jj+1) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/2;
+                   tempMat(ii,jj+1) = -4/2;
                elseif ii==1 && jj==newDims(unitChannel(zz),2)
-                   tempMat(ii,jj) = 2;
-                   tempMat(ii,jj-1) = -1;
-                   tempMat(ii+1,jj) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii,jj-1) = -4/2;
+                   tempMat(ii+1,jj) = -4/2;
                elseif ii == newDims(unitChannel(zz),1) && jj == newDims(unitChannel(zz),2)
-                   tempMat(ii,jj) = 2;
-                   tempMat(ii-1,jj) = -1;
-                   tempMat(ii,jj-1) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/2;
+                   tempMat(ii,jj-1) = -4/2;
                elseif ii==1
-                   tempMat(ii,jj) = 3;
-                   tempMat(ii,jj-1) = -1;
-                   tempMat(ii+1,jj) = -1;
-                   tempMat(ii,jj+1) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii,jj-1) = -4/3;
+                   tempMat(ii+1,jj) = -4/3;
+                   tempMat(ii,jj+1) = -4/3;
                elseif jj==1
-                   tempMat(ii,jj) = 3;
-                   tempMat(ii-1,jj) = -1;
-                   tempMat(ii,jj+1) = -1;
-                   tempMat(ii+1,jj) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/3;
+                   tempMat(ii,jj+1) = -4/3;
+                   tempMat(ii+1,jj) = -4/3;
                elseif ii==newDims(unitChannel(zz),1)
-                   tempMat(ii,jj) = 3;
-                   tempMat(ii-1,jj) = -1;
-                   tempMat(ii,jj-1) = -1;
-                   tempMat(ii,jj+1) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/3;
+                   tempMat(ii,jj-1) = -4/3;
+                   tempMat(ii,jj+1) = -4/3;
                elseif jj==newDims(unitChannel(zz),2)
-                   tempMat(ii,jj) = 3;
-                   tempMat(ii-1,jj) = -1;
-                   tempMat(ii+1,jj) = -1;
-                   tempMat(ii,jj-1) = -1;
+                   tempMat(ii,jj) = 4;
+                   tempMat(ii-1,jj) = -4/3;
+                   tempMat(ii+1,jj) = -4/3;
+                   tempMat(ii,jj-1) = -4/3;
                else
                    tempMat(ii,jj) = 4;
                    tempMat(ii-1,jj) = -1;
@@ -441,7 +441,7 @@ for zz=1:totalUnits
        heldOutExplainedVariance(zz,1) = 1-tempDev(bestMap,1)/dev;
        fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
        
-       if heldOutExplainedVariance(zz,1) >= 0.02
+       if heldOutExplainedVariance(zz,1) >= 0.05
            figure();imagesc(reshape(fhat,[newDims(unitChannel(zz),1),newDims(unitChannel(zz),2)]));
            title(sprintf('%s',EphysFileName(1:end-9)));
        end
