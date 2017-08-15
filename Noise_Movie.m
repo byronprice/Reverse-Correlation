@@ -102,7 +102,7 @@ while count<=numMoviesToDisplay
         else
             index = movieNums(count);
             load(sprintf('12Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
-            %     S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
+%                 S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
             tt = 1;
             while tt <= numStimuli
                 %     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
@@ -135,13 +135,13 @@ Screen('CloseAll');
 Priority(0);
 
 movieType = '12Sec_PinkNoise';
-
+whiteBlackCutoff = 60;
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat','pink',Date,AnimalName);
 save(filename,'numMoviesToDisplay','movie_FrameRate','movieTime_Seconds',...
     'DistToScreen','screenPix_to_effPix','minPix','maxPix',...
-    'conv_factor','movieNums','destRect','movieType');
+    'conv_factor','movieNums','destRect','movieType','whiteBlackCutoff');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
