@@ -322,41 +322,41 @@ for zz=1:totalUnits
                tempMat = zeros(newDims(unitChannel(zz),1),newDims(unitChannel(zz),2));
                
                if ii==1 && jj==1
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii+1,jj) = -4/2;
-                   tempMat(ii,jj+1) = -4/2;
+                   tempMat(ii,jj) = 2;
+                   tempMat(ii+1,jj) = -1;
+                   tempMat(ii,jj+1) = -1;
                elseif ii==newDims(unitChannel(zz),1) && jj==1
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii-1,jj) = -4/2;
-                   tempMat(ii,jj+1) = -4/2;
+                   tempMat(ii,jj) = 2;
+                   tempMat(ii-1,jj) = -1;
+                   tempMat(ii,jj+1) = -1;
                elseif ii==1 && jj==newDims(unitChannel(zz),2)
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii,jj-1) = -4/2;
-                   tempMat(ii+1,jj) = -4/2;
+                   tempMat(ii,jj) = 2;
+                   tempMat(ii,jj-1) = -1;
+                   tempMat(ii+1,jj) = -1;
                elseif ii == newDims(unitChannel(zz),1) && jj == newDims(unitChannel(zz),2)
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii-1,jj) = -4/2;
-                   tempMat(ii,jj-1) = -4/2;
+                   tempMat(ii,jj) = 2;
+                   tempMat(ii-1,jj) = -1;
+                   tempMat(ii,jj-1) = -1;
                elseif ii==1
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii,jj-1) = -4/3;
-                   tempMat(ii+1,jj) = -4/3;
-                   tempMat(ii,jj+1) = -4/3;
+                   tempMat(ii,jj) = 3;
+                   tempMat(ii,jj-1) = -1;
+                   tempMat(ii+1,jj) = -1;
+                   tempMat(ii,jj+1) = -1;
                elseif jj==1
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii-1,jj) = -4/3;
-                   tempMat(ii,jj+1) = -4/3;
-                   tempMat(ii+1,jj) = -4/3;
+                   tempMat(ii,jj) = 3;
+                   tempMat(ii-1,jj) = -1;
+                   tempMat(ii,jj+1) = -1;
+                   tempMat(ii+1,jj) = -1;
                elseif ii==newDims(unitChannel(zz),1)
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii-1,jj) = -4/3;
-                   tempMat(ii,jj-1) = -4/3;
-                   tempMat(ii,jj+1) = -4/3;
+                   tempMat(ii,jj) = 3;
+                   tempMat(ii-1,jj) = -1;
+                   tempMat(ii,jj-1) = -1;
+                   tempMat(ii,jj+1) = -1;
                elseif jj==newDims(unitChannel(zz),2)
-                   tempMat(ii,jj) = 4;
-                   tempMat(ii-1,jj) = -4/3;
-                   tempMat(ii+1,jj) = -4/3;
-                   tempMat(ii,jj-1) = -4/3;
+                   tempMat(ii,jj) = 3;
+                   tempMat(ii-1,jj) = -1;
+                   tempMat(ii+1,jj) = -1;
+                   tempMat(ii,jj-1) = -1;
                else
                    tempMat(ii,jj) = 4;
                    tempMat(ii-1,jj) = -1;

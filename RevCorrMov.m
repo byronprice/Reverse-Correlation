@@ -64,8 +64,6 @@ allts = temp;
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
-strobeData = strobeData(svStrobed>0 & svStrobed<254);
-
 forMovStrobed = svStrobed(svStrobed>0 & svStrobed<254);
 
 % GATHER LFP AND MOVEMENT DATA
@@ -103,7 +101,8 @@ end
 timeMultiplier = 1000;
 totalMillisecs = round(totalTime*timeMultiplier);
 
-stimTimes = round(strobeData.*timeMultiplier);
+temp = strobeData(svStrobed>0 & svStrobed<254);
+stimTimes = round(temp.*timeMultiplier);
 
 pointProcessSpikes = zeros(totalMillisecs,totalUnits);
 
@@ -114,11 +113,12 @@ for ii=1:totalUnits
    end
 end
 
+
+movieLen = movie_FrameRate*movieTime_Seconds;
+
 temp = randperm(numMoviesToDisplay);
 divide = round(0.7*numMoviesToDisplay);
 train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
-
-movieLen = movie_FrameRate*movieTime_Seconds-1*movie_FrameRate;
 
 load(sprintf('%sMovie1.mat',movieType),'DIM');
 
@@ -126,12 +126,12 @@ xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
     round(screenPix_to_effPix*DIM(2)/2),DIM(2));
 yaxis = linspace(round(3*screenPix_to_effPix*DIM(1)/4),...
     -round(screenPix_to_effPix*DIM(1)/4)+1,DIM(1));
-taxis = linspace(300,50,16);
+taxis = linspace(500,50,28);
 
 
 movieIndices = zeros(movieLen*numMoviesToDisplay,length(taxis));
 movieFrames = zeros(movieLen*numMoviesToDisplay,DIM(1)*DIM(2),'uint8');
-reducedSpikeCount = zeros(totalUnits,movieLen*numMoviesToDisplay);
+reducedSpikeCount = zeros(movieLen*numMoviesToDisplay,totalUnits);
 reducedMov = zeros(movieLen*numMoviesToDisplay,1);
 
 count = 1;
@@ -139,26 +139,32 @@ for ii=1:numMoviesToDisplay
     index = movieNums(ii);
     fileName = sprintf('%sMovie%d.mat',movieType,index);
     load(fileName,'S');
+    currentMovStrobes = forMovStrobed(forMovStrobed==index);
     for jj=1:movieLen
-        temp = S(:,:,jj+movie_FrameRate);
+        temp = S(:,:,jj);
         movieFrames(count,:) = temp(:);
-        movieIndices(count,:) = count:(count+length(taxis)-1);
+        temp2 = count-length(taxis):count-1;
+        movieIndices(count,:) = max(temp2,0);
+        onsetTime = stimTimes(currentMovStrobes(jj));
+        offsetTime = onsetTime+round(1/movie_FrameRate);
         for kk=1:totalUnits
-            reducedSpikeCount(kk,count) = 0;
-            
+            reducedSpikeCount(count,kk) = sum(pointProcessSpikes(onsetTime:offsetTime,kk));
+            reducedMov(count) = sum(movement(onsetTime:offsetTime));
         end
         count = count+1;
     end
 end
 
+movieFrames = [Grey.*ones(1,DIM(1)*DIM(2),'uint8');movieFrames];
+movieIndices = movieIndices+1;
+
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis taxis...
-    totalJiffysecs reducedMov movement AnimalName numChans movieIndices ...
-    movieFrames;
+    totalMillisecs reducedMov movement AnimalName numChans movieIndices ...
+    movieFrames pointProcessSpikes svStrobed forMovStrobed stimTimes;
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION, CREATE CONVOLUTION MATRIX L
-[centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans)
-S = double(S);
+[centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans);
 
 warning('off','all');
 
@@ -174,9 +180,9 @@ sigmoidNonlin = zeros(totalUnits,4);
 visualResponsiveness = zeros(totalUnits,2);
 for zz=1:totalUnits
    fprintf('Running unit %d ...\n',zz);
-   spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
+   spikeTrain = squeeze(reducedSpikeCount(:,zz));
    
-   baseRate = sum(sum(spikeTrain(:,51:400)))./(numStimuli*0.35);
+   baseRate = sum(pointProcessSpikes
    
    y = [sum(spikeTrain(:,51:150),2);sum(spikeTrain(:,901:1000),2)];
    design1 = ones(2*numStimuli,1);
