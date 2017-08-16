@@ -49,12 +49,14 @@ temp = ~cellfun(@isempty,allts);
 Chans = find(sum(temp,1));numChans = length(Chans);
 totalUnits = sum(sum(temp))-numChans;
 
+unitChannel = zeros(totalUnits,1);
 temp = cell(totalUnits,1);
 count = 1;
 for ii=1:numChans
    for jj=2:nunits1
        if isempty(allts{jj,Chans(ii)}) == 0
            temp{count} = allts{jj,Chans(ii)};
+           unitChannel(count) = ii;
            count = count+1;
        end
    end
@@ -113,6 +115,20 @@ for ii=1:totalUnits
    end
 end
 
+N_VisRespTest = 5e4;
+forVisualResponse = zeros(N_VisRespTest,1);
+N = length(stimTimes);
+temp = strobeData(svStrobed==0);
+greyTimes = round(temp.*timeMultiplier);
+greyTimes = greyTimes(1:end-1);
+NN = length(greyTimes);
+for ii=1:N_VisRespTest/2
+    index = randperm(N,1);
+    forVisualResponse(ii) = stimTimes(index)+0.06*timeMultiplier;
+    index = randperm(NN,1);
+    forVisualResponse(ii+N_VisRespTest/2) = greyTimes(index)+timeMultiplier+...
+        random('Discrete Uniform',5*timeMultiplier);
+end
 
 movieLen = movie_FrameRate*movieTime_Seconds;
 
@@ -155,13 +171,14 @@ for ii=1:numMoviesToDisplay
     end
 end
 
-movieFrames = [Grey.*ones(1,DIM(1)*DIM(2),'uint8');movieFrames];
+movieFrames = [127.*ones(1,DIM(1)*DIM(2),'uint8');movieFrames];
 movieIndices = movieIndices+1;
 
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM unbiasedS allts strobeData xaxis yaxis taxis...
     totalMillisecs reducedMov movement AnimalName numChans movieIndices ...
-    movieFrames pointProcessSpikes svStrobed forMovStrobed stimTimes;
+    movieFrames pointProcessSpikes svStrobed forMovStrobed stimTimes ...
+    timeMultiplier forVisualResponse N_VisRespTest;
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION, CREATE CONVOLUTION MATRIX L
 [centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans);
@@ -171,7 +188,6 @@ warning('off','all');
 numLambda = 50;
 loglambda = logspace(1,7,numLambda);
 F = cell(totalUnits,1);
-STA = zeros(totalUnits,DIM(1)*DIM(2));
 
 bestLambda = zeros(totalUnits,1);
 heldOutDeviance = zeros(totalUnits,5);
@@ -180,39 +196,24 @@ sigmoidNonlin = zeros(totalUnits,4);
 visualResponsiveness = zeros(totalUnits,2);
 for zz=1:totalUnits
    fprintf('Running unit %d ...\n',zz);
-   spikeTrain = squeeze(reducedSpikeCount(:,zz));
+   spikeTrain = pointProcessSpikes(:,zz);
    
-   baseRate = sum(pointProcessSpikes
+   baseRate = sum(pointProcessSpikes(:,zz))/(length(pointProcessSpikes(:,zz))/timeMultiplier);
    
-   y = [sum(spikeTrain(:,51:150),2);sum(spikeTrain(:,901:1000),2)];
-   design1 = ones(2*numStimuli,1);
-   design2 = [[ones(numStimuli,1);zeros(numStimuli,1)],...
-       [zeros(numStimuli,1);ones(numStimuli,1)]];
+   y = spikeTrain(forVisualResponse);
+   design1 = ones(N_VisRespTest,1);
+   design2 = [[ones(N_VisRespTest/2,1);zeros(N_VisRespTest/2,1)],...
+       [zeros(N_VisRespTest/2,1);ones(N_VisRespTest/2,1)]];
    [~,dev1,~] = glmfit(design1,y,'poisson','constant','off');
    [~,dev2,~] = glmfit(design2,y,'poisson','constant','off');
    dfDiff = 1;
    pVal = chi2cdf(dev1-dev2,dfDiff,'upper');
    visualResponsiveness(zz,1) = pVal;
    visualResponsiveness(zz,2) = pVal<0.01;
+   clear design1 design2;
    
-   if visualResponsiveness(zz,2) == 1
-       spikeTrain = sum(spikeTrain(:,50:150),2);
-       
-       % PCA solution
-       %    [V,D] = eig(cov(S));
-       %    eigenvals = diag(D);
-       %    start = find(eigenvals>10,1,'first');
-       %    q = size(eigenvals(start:end),1);
-       %    meanEig = mean(eigenvals(1:start-1));
-       %    W = V(:,start:end)*sqrtm(D(start:end,start:end)-meanEig.*eye(q));
-       %    W = fliplr(W);
-       %    Winv = pinv(W);
-       %    x = zeros(q,numStimuli);
-       %    for ii=1:numStimuli
-       %       x(:,ii) = Winv*(S(ii,:)'-127);
-       %    end
-       %    x = x';
-       %    fhat = x(train,:)\spikeTrain(train); % then proceed as usual, with no smoothing
+   if visualResponsiveness(zz,2) <= 1
+       spikeTrain = reducedSpikeCount(:,zz);
        
        % GET SMALLER SECTION OF IMAGE DISPLAYED ON THE SCREEN
        fullSize = newDims(unitChannel(zz),1)*newDims(unitChannel(zz),2);

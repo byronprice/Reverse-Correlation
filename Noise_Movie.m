@@ -91,7 +91,6 @@ movieNums = random('Discrete Uniform',250,[numMoviesToDisplay,1]);
 usb.startRecording;WaitSecs(1);usb.strobeEventWord(0);
 WaitSecs(30);
 usb.strobeEventWord(startEXP);WaitSecs(1);
-vbl = Screen('Flip',win);
 count = 1;
 while count<=numMoviesToDisplay
     if tcpipClient.BytesAvailable > 0
@@ -103,6 +102,7 @@ while count<=numMoviesToDisplay
             index = movieNums(count);
             load(sprintf('12Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
 %                 S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
+            vbl = Screen('Flip',win);
             tt = 1;
             while tt <= numStimuli
                 %     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
@@ -115,7 +115,7 @@ while count<=numMoviesToDisplay
                 Screen('Close',tex);
                 tt = tt+1;
             end
-            vbl = Screen('Flip',win);usb.strobeEventWord(0);
+            vbl = Screen('Flip',win,vbl+flipInterval);usb.strobeEventWord(0);
             if mod(count,30) == 0
                 vbl = Screen('Flip',win,vbl+30);
             end
