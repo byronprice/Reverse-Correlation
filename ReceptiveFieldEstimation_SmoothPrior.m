@@ -1,21 +1,21 @@
 % ReceptiveFieldEstimation_SmoothPrior.m
 
 % INITIALIZE VARIABLES AND MAKE SEQUENCE VIDEO, binned at 1ms
-fileName = sprintf('5Min_PinkNoiseMovie%d.mat',1);
-load(fileName);
-xaxis = linspace(-maxPix/2,maxPix/2,DIM(2));
-yaxis = linspace(-minPix/4,3*minPix/4,DIM(1));
+% fileName = sprintf('5Min_PinkNoiseMovie%d.mat',1);
+% load(fileName);
+% xaxis = linspace(-maxPix/2,maxPix/2,DIM(2));
+% yaxis = linspace(-minPix/4,3*minPix/4,DIM(1));
 
 %S = normrnd(0,1,[N,N,numStimuli]);
 timeMultiplier = 100;
 totalCentisecs = 1*60*timeMultiplier;
 
-stimTimes = round((0:1/60:5*60-1/60).*timeMultiplier);
-pointProcessStimTimes = zeros(totalCentisecs,1);
-for ii=1:numStimuli-1
-    pointProcessStimTimes(stimTimes(ii)+1:stimTimes(ii+1)) = ii;
-end
-pointProcessStimTimes(stimTimes(numStimuli):stimTimes(numStimuli)+15) = numStimuli;
+% stimTimes = round((0:1/60:5*60-1/60).*timeMultiplier);
+% pointProcessStimTimes = zeros(totalCentisecs,1);
+% for ii=1:numStimuli-1
+%     pointProcessStimTimes(stimTimes(ii)+1:stimTimes(ii+1)) = ii;
+% end
+% pointProcessStimTimes(stimTimes(numStimuli):stimTimes(numStimuli)+15) = numStimuli;
 
 % DEFINE SPATIOTEMPORAL RECEPTIVE FIELD (STRF) AND PLOT EXAMPLE CONVOLUTION
 %   OF STRF WITH SEQUENCE STIMULUS
@@ -42,8 +42,8 @@ phi = 0; % phase of the sinusoid
 v = 0; % velocity (shift in the phase over time)
 
 
-[X,Y,T] = meshgrid(xaxis,yaxis,t);
-filter1 = gaborFun(X,Y,T,k,n,v,A,0,0,sigmax,sigmay,spatFreq,theta,phi);
+% [X,Y,T] = meshgrid(xaxis,yaxis,t);
+% filter1 = gaborFun(X,Y,T,k,n,v,A,0,0,sigmax,sigmay,spatFreq,theta,phi);
 
 filterLen = length(t);
 convResult = zeros(totalCentisecs,1);
@@ -132,9 +132,9 @@ alpha = 1;beta = 1;delta = 1;
 abprior1=1e-3;abprior2=1e-3;
 
 params(1:end-3,1) = mvnrnd([priorMu;zeros(historyParams,1)],eye(numParams-3))';
-params(end-2,1) = log(alpha);
-params(end-1,1) = log(beta);
-params(end,1) = log(delta);
+params(end-2,1) = alpha;
+params(end-1,1) = beta;
+params(end,1) = delta;
 
 logPoissonPDF = @(y,mu) y.*mu-exp(mu);
 logGammaPDF = @(x,a,b) a*log(b)-log(gamma(a))+(a-1).*log(x)-x.*b;
@@ -171,8 +171,8 @@ updateParam = logspace(-0.3,-2,burnIn);
 loglambda = ones(numParams,1).*log(2.38^2);
 updateMu = zeros(numParams,1);
 updateMu(1:end-3) = mvnrnd([priorMu;zeros(historyParams,1)],eye(numParams-3))';
-updateMu(end-2) = log(1.5);updateMu(end-1) = log(1.4);
-updateMu(end) = log(1.3);
+updateMu(end-2) = 1.5;updateMu(end-1) = 1.4;
+updateMu(end) = 1.3;
 optimalAccept = 0.234;
 
 q = numParams;qIdentity = eye(q);identity = eye(numParams);
@@ -192,12 +192,12 @@ for ii=2:burnIn
     stdev = sqrt(exp(lambda).*eigenvals(index));
     pStar = params(:,ii-1)+W(:,index)*normrnd(0,stdev);
     
-%     if sum(pStar(end-1:end)<=-100) == 0
+    if sum(pStar(end-2:end)<=0) == 0
         tempMu = X*pStar(1:end-3);
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
         smoothPrior = del2(pStar(2:end-3));
         
-        delta = exp(pStar(end));beta = exp(pStar(end-1));alpha = exp(pStar(end-2));
+        delta = pStar(end);beta = pStar(end-1);alpha = pStar(end-2);
         pStarLogPrior = ((historyParams)*0.5)*log(alpha)-0.5*alpha*(pStar(2:end-3)'*pStar(2:end-3))+...
             0.5*log(delta)-0.5*delta*(pStar(1)-priorMu)^2+...
             ((historyParams)*0.5)*log(beta)-0.5*beta*(smoothPrior'*smoothPrior)+...
@@ -214,22 +214,28 @@ for ii=2:burnIn
             params(:,ii) = params(:,ii-1);
             posteriorProb(ii) = posteriorProb(ii-1);
         end
+        lambda = lambda+updateParam(ii).*(exp(min(0,logA))-optimalAccept);
+    else
+        params(:,ii) = params(:,ii-1);
+        posteriorProb(ii) = posteriorProb(ii-1);
+        lambda = lambda+updateParam(ii).*(-optimalAccept);
+    end
+      
+    if mod(ii,100) == 0
+        meanSubtract = params(:,ii)-updateMu;
+        updateMu = updateMu+updateParam(ii).*meanSubtract;
+        %         sigma2 = sigma2+updateParam(ii).*(meanSubtract*meanSubtract'-sigma2);
+        halfSigma = halfSigma+updateParam(ii).*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
+            meanSubtract')*((inv(halfSigma))')-identity)-halfSigma);
+        sigma = halfSigma'*halfSigma;
         
-        if mod(ii,100) == 0
-            meanSubtract = params(:,ii)-updateMu;
-            updateMu = updateMu+updateParam(ii).*meanSubtract;
-            %         sigma2 = sigma2+updateParam(ii).*(meanSubtract*meanSubtract'-sigma2);
-            halfSigma = halfSigma+updateParam(ii).*(triu((inv(halfSigma))*(halfSigma'*halfSigma+meanSubtract*...
-                meanSubtract')*((inv(halfSigma))')-identity)-halfSigma);
-            sigma = halfSigma'*halfSigma;
-            
-            Z = inv(tril(W'*W)')'*W';
-            W = sigma*Z'*inv(triu(Z*sigma*Z'));
-            W = normc(W);
-            eigenvals = diag(W'*sigma*W);
-            lambda = lambda+updateParam(ii).*(exp(min(0,logA))-optimalAccept);
-            
-        end
+        Z = inv(tril(W'*W)')'*W';
+        W = sigma*Z'*inv(triu(Z*sigma*Z'));
+        W = normc(W);
+        eigenvals = diag(W'*sigma*W);
+        
+    end
+    
         
 %         Minv = 1./M(1:q+1:end)';
 %         H = (Minv.*W')*(meanSubtract);
@@ -249,11 +255,6 @@ for ii=2:burnIn
 %         eigenvals = M(1:q+1:end)';
          
         
-%     else
-%         params(:,ii) = params(:,ii-1);
-%         posteriorProb(ii) = posteriorProb(ii-1);
-%         lambda = lambda+updateParam(ii).*(-optimalAccept);
-%     end
     loglambda(index) = lambda;
 %     scatter(ii,posteriorProb(ii));hold on;pause(0.01);
 %     error(ii) = mean(abs([log(baseRate);historyB]-updateMu));
@@ -286,12 +287,12 @@ for ii=burnIn+1:numIter
     stdev = sqrt(exp(lambda).*eigenvals(index));
     pStar = params(:,ii-1)+W(:,index)*normrnd(0,stdev);
     
-%     if sum(pStar(end-1:end)<=-100) == 0
+    if sum(pStar(end-2:end)<=0) == 0
         tempMu = X*pStar(1:end-3);
         pStarLogLikelihood = sum(logPoissonPDF(y,tempMu));
         smoothPrior = del2(pStar(2:end-3));
         
-        delta = exp(pStar(end));beta = exp(pStar(end-1));alpha = exp(pStar(end-2));
+        delta = pStar(end);beta = pStar(end-1);alpha = pStar(end-2);
         pStarLogPrior = ((historyParams)*0.5)*log(alpha)-0.5*alpha*(pStar(2:end-3)'*pStar(2:end-3))+...
             0.5*log(delta)-0.5*delta*(pStar(1)-priorMu)^2+...
             ((historyParams)*0.5)*log(beta)-0.5*beta*(smoothPrior'*smoothPrior)+...
@@ -311,11 +312,11 @@ for ii=burnIn+1:numIter
             posteriorProb(ii) = posteriorProb(ii-1);
         end
         lambda = lambda+updateParam.*(exp(min(0,logA))-optimalAccept);
-%     else
-%         params(:,ii) = params(:,ii-1);
-%         posteriorProb(ii) = posteriorProb(ii-1);
-%         lambda = lambda+updateParam.*(-optimalAccept);
-%     end
+    else
+        params(:,ii) = params(:,ii-1);
+        posteriorProb(ii) = posteriorProb(ii-1);
+        lambda = lambda+updateParam.*(-optimalAccept);
+    end
     loglambda(index) = lambda;
 end
 
