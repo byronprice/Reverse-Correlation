@@ -94,6 +94,8 @@ end
 
 movieLen = movie_FrameRate*movieTime_Seconds;
 
+%numMoviesToDisplay = length(movieNums);
+
 temp = randperm(numMoviesToDisplay);
 divide = round(0.7*numMoviesToDisplay);
 train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
@@ -116,7 +118,41 @@ bigcount = 1;
 for ii=1:numMoviesToDisplay
     index = movieNums(ii);
     fileName = sprintf('%sMovie%d.mat',movieType,index);
-    load(fileName,'S');
+    load(fileName,'S','beta','numStimuli','DIM');
+    
+    
+    u = [(0:floor(DIM(1)/2)) -(ceil(DIM(1)/2)-1:-1:1)]'/(DIM(1));
+    v = [(0:floor(DIM(2)/2)) -(ceil(DIM(2)/2)-1:-1:1)]'/(DIM(2));
+    t = [(0:floor(DIM(3)/2)) -(ceil(DIM(3)/2)-1:-1:1)]'/(DIM(3));
+    [V,U,T] = meshgrid(v,u,t);
+    S_f = (U.^2+V.^2+T.^2).^(beta/2);
+    clear U V T u v t;
+    S_f(S_f==inf) = 0;
+    
+    S_f = 1./S_f;
+    S_f(S_f==inf) = 0;
+    S_f = S_f.^0.25;
+    
+    unbiasedS = real(ifftn(fftn(double(S)).*S_f));
+    S = unbiasedS;
+    
+    if strcmp(NoiseType,'pinkHC') == 1
+       desiredMin = 0;
+       desiredMax = 255;
+       Grey = 127;%desiredStd = 38;
+       for jj=1:numStimuli
+           temp = S(:,:,jj);
+           currentMax = max(temp(:));
+           currentMin = min(temp(:));
+           temp = (desiredMax-desiredMin)./(currentMax-currentMin).*(temp-currentMax)+desiredMax;
+           difference = mean(temp(:))-Grey;
+           S(:,:,jj) = temp-difference;
+       end
+        
+       topCutoff = 255-whiteBlackCutoff+1;
+       S(S<whiteBlackCutoff) = 0;
+       S(S>=whiteBlackCutoff & S<topCutoff) = 127;S(S>=topCutoff) = 255; 
+    end
     currentMovStrobes = find(forMovStrobed==index);
     
     lilcount = 1;
@@ -161,9 +197,9 @@ for ii=1:numIter
     for jj=1:totalUnits
         numSpikes = reducedSpikeCount(ii,jj);
         if numSpikes>0
-            spikeCounts = spikeCounts+1;
+            spikeCounts(jj) = spikeCounts(jj)+numSpikes;
             currentMovie = movieFrames(movieIndices(ii,:),:);
-            STA{ii} = STA{ii}+numSpikes*currentMovie;
+            STA{jj} = STA{jj}+numSpikes*double(currentMovie);
         end
     end
 end
