@@ -35,7 +35,7 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 %    
 % Created: 2016/03/04, 24 Cummington, Boston
 %  Byron Price
-% Updated: 2017/07/17
+% Updated: 2017/10/06
 % By: Byron Price
 
 % assume we sample at some frequency, Fs, and have a point process
@@ -55,14 +55,10 @@ function [] = RevCorrUnits(AnimalName,Date,NoiseType)
 % read in the .plx file
 beta = 0;
 
-EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName),'-sort.mat');
-
-if exist(EphysFileName,'file') ~= 2
-    readall(strcat(EphysFileName(1:end-4),'.plx'));pause(1);
-end
+EphysFileName = strcat('NoiseData',NoiseType,num2str(Date),'_',num2str(AnimalName),'-mounsort.mat');
 
 StimulusFileName = strcat('NoiseStim',NoiseType,num2str(Date),'_',num2str(AnimalName),'.mat');
-load(EphysFileName,'nunits1','allts','adfreq','allad','svStrobed','tsevs')
+load(EphysFileName,'nunits1','allts','adfreqs','allad','svStrobed','tsevs','totalTime','totalUnits','Chans')
 load(StimulusFileName)
 
 % gaborFun = @(x,y,B,A,xc,yc,sigmax,sigmay,spatFreq,theta,phi) ...
@@ -103,25 +99,6 @@ else
    train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
 end
 
-% REORGANIZE SPIKING DATA
-temp = ~cellfun(@isempty,allts);
-Chans = find(sum(temp,1));numChans = length(Chans);
-totalUnits = sum(sum(temp))-numChans;
-
-unitChannel = zeros(totalUnits,1);
-temp = cell(totalUnits,1);
-count = 1;
-for ii=1:numChans
-   for jj=2:nunits1
-       if isempty(allts{jj,Chans(ii)}) == 0
-           temp{count} = allts{jj,Chans(ii)};
-           unitChannel(count) = ii;
-           count = count+1;
-       end
-   end
-end
-allts = temp;
-
 strobeStart = 33;
 strobeData = tsevs{1,strobeStart};
 
@@ -139,10 +116,9 @@ for ii=1:length(inds)
    LFP{ii} = allad{inds};
 end
 
-totalTime = length(LFP{1})./adfreq;
-
 if isempty(allad{49}) == 0
     movement = allad{49};
+    adfreq = adfreqs(49);
 
     difference = length(LFP{1})-length(movement);
     
@@ -194,70 +170,11 @@ end
 clearvars -except EphysFileName totalUnits numStimuli ...
     reducedSpikeCount DIM allts strobeData xaxis yaxis ...
     X Y totalMillisecs reducedMov movement svStrobed S ...
-    test train beta AnimalName unitChannel numChans;
+    test train AnimalName unitChannel numChans totalTime;
 
 
 % get expected location of RF based on LFP receptive region mapping
-[centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans);
-
-% GLM with Gaussian basis functions
-% fullSize = DIM(1)*DIM(2);
-% basisStdDevs = [250,500,750,1000,1250,1500,1750,2000,2500];
-% numStdDevs = length(basisStdDevs);
-% 
-% finalResultsPoissonB = cell(totalUnits,numStdDevs);
-% finalResultsPoissonDev = cell(totalUnits,numStdDevs);
-% finalResultsPoissonSE = cell(totalUnits,numStdDevs);
-% temp = randperm(numStimuli);
-% divide = round(0.7*numStimuli);
-% train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
-% for zz=1:totalUnits
-%    spikeTrain = squeeze(reducedSpikeCount(zz,:,:));
-%    spikeTrain = sum(spikeTrain(:,50:300),2);
-%    movDesign = sum(reducedMov(:,50:300),2);
-%    
-%    %    r = spikeTrain;
-%    %    fhat = unbiasedS\r;
-%    gaussFun = @(x,y,xc,yc,std) exp(-((x-xc).*(x-xc))./(2*std*std)-...
-%        ((y-yc).*(y-yc))./(2*std*std));
-%    
-%    center1 = xaxis(1:3:end);
-%    center2 = yaxis(1:3:end);
-%    numBasis1 = length(center1);
-%    numBasis2 = length(center2);
-%    totalParams = numBasis1*numBasis2;
-%    
-%    basisFuns = zeros(fullSize,totalParams);
-%    for stddev = 1:numStdDevs
-%        count = 1;
-%        for ii=1:numBasis1
-%            for jj=1:numBasis2
-%                temp = gaussFun(X,Y,center1(ii),center2(jj),basisStdDevs(stddev));
-%                basisFuns(:,count) = temp(:)./max(temp(:));
-%                count = count+1;
-%            end
-%        end
-%        design = [ones(numStimuli,1),unbiasedS*basisFuns];
-%        [bPoiss,~,statsPoiss] = glmfit(design(train,:),spikeTrain(train),'poisson','constant','off');
-%        finalResultsPoissonB{zz,stddev} = bPoiss;
-%        finalResultsPoissonSE{zz,stddev} = statsPoiss.se;
-%        
-%        mu = exp(design(test,:)*bPoiss);
-%        deviance = spikeTrain(test).*log(spikeTrain(test)./mu)-(spikeTrain(test)-mu);
-%        deviance(isnan(deviance)) = mu(isnan(deviance));
-%        devPoiss = 2.*sum(deviance);
-%        finalResultsPoissonDev{zz,stddev} = devPoiss;
-%        clear bPoiss devPoiss statsPoiss count design;
-%    end
-%    clear spikeTrain movDesign basisFuns center1 center2 numBasis1 numBasis2 totalParams;
-% end
-% 
-% fileName = strcat(EphysFileName(1:end-9),'-GLMResults.mat');
-% save(fileName,'finalResultsPoissonB',...
-%     'finalResultsPoissonDev',...
-%     'finalResultsPoissonSE','allts','totalUnits',...
-%     'reducedSpikeCount','DIM','unbiasedS','movement',...
-%     'xaxis','yaxis','basisStdDevs','reducedMov','strobeData','svStrobed','totalMillisecs');
+% [centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans);
 
 % REGULARIZED PSEUDO-INVERSE SOLUTION, CREATE CONVOLUTION MATRIX L
 S = double(S);
@@ -265,7 +182,7 @@ S = double(S);
 warning('off','all');
 
 numLambda = 50;
-loglambda = logspace(1,7,numLambda);
+loglambda = logspace(2,6,numLambda);
 F = cell(totalUnits,1);
 STA = zeros(totalUnits,DIM(1)*DIM(2));
 
@@ -289,9 +206,10 @@ for zz=1:totalUnits
    dfDiff = 1;
    pVal = chi2cdf(dev1-dev2,dfDiff,'upper');
    visualResponsiveness(zz,1) = pVal;
-   visualResponsiveness(zz,2) = pVal<0.01;
+   visualResponsiveness(zz,2) = pVal<0.05;
    
    if visualResponsiveness(zz,2) == 1
+       figure();imagesc(spikeTrain);
        spikeTrain = sum(spikeTrain(:,50:150),2);
        
        % PCA solution
@@ -311,29 +229,29 @@ for zz=1:totalUnits
        %    fhat = x(train,:)\spikeTrain(train); % then proceed as usual, with no smoothing
        
        % GET SMALLER SECTION OF IMAGE DISPLAYED ON THE SCREEN
-       fullSize = newDims(unitChannel(zz),1)*newDims(unitChannel(zz),2);
+       fullSize = DIM(1)*DIM(2);
        L = sparse(fullSize,fullSize);
        
        %operator = [0,-1,0;-1,4,-1;0,-1,0];
        bigCount = 1;
-       for jj=1:newDims(unitChannel(zz),2)
-           for ii=1:newDims(unitChannel(zz),1)
+       for jj=1:DIM(2)
+           for ii=1:DIM(1)
 
-               tempMat = zeros(newDims(unitChannel(zz),1),newDims(unitChannel(zz),2));
+               tempMat = zeros(DIM(1),DIM(2));
                
                if ii==1 && jj==1
                    tempMat(ii,jj) = 2;
                    tempMat(ii+1,jj) = -1;
                    tempMat(ii,jj+1) = -1;
-               elseif ii==newDims(unitChannel(zz),1) && jj==1
+               elseif ii==DIM(1) && jj==1
                    tempMat(ii,jj) = 2;
                    tempMat(ii-1,jj) = -1;
                    tempMat(ii,jj+1) = -1;
-               elseif ii==1 && jj==newDims(unitChannel(zz),2)
+               elseif ii==1 && jj==DIM(2)
                    tempMat(ii,jj) = 2;
                    tempMat(ii,jj-1) = -1;
                    tempMat(ii+1,jj) = -1;
-               elseif ii == newDims(unitChannel(zz),1) && jj == newDims(unitChannel(zz),2)
+               elseif ii == DIM(1) && jj == DIM(2)
                    tempMat(ii,jj) = 2;
                    tempMat(ii-1,jj) = -1;
                    tempMat(ii,jj-1) = -1;
@@ -347,12 +265,12 @@ for zz=1:totalUnits
                    tempMat(ii-1,jj) = -1;
                    tempMat(ii,jj+1) = -1;
                    tempMat(ii+1,jj) = -1;
-               elseif ii==newDims(unitChannel(zz),1)
+               elseif ii==DIM(1)
                    tempMat(ii,jj) = 3;
                    tempMat(ii-1,jj) = -1;
                    tempMat(ii,jj-1) = -1;
                    tempMat(ii,jj+1) = -1;
-               elseif jj==newDims(unitChannel(zz),2)
+               elseif jj==DIM(2)
                    tempMat(ii,jj) = 3;
                    tempMat(ii-1,jj) = -1;
                    tempMat(ii+1,jj) = -1;
@@ -378,11 +296,11 @@ for zz=1:totalUnits
        %    allOnesTest = ones(length(test),1);
        for jj=1:numLambda
            % calculate regularized pseudoinverse solution
-           constraints = [S(train,rfInds{unitChannel(zz)});loglambda(jj).*L];
+           constraints = [S(train,:);loglambda(jj).*L];
            fhat = constraints\r;fhat = full(fhat);
            
            % fit sigmoid nonlinearity
-           result = S(train,rfInds{unitChannel(zz)})*fhat;
+           result = S(train,:)*fhat;
            myFun = @(x) x(1)./(1+exp(-(result-x(2)).*x(3)))+x(4)-spikeTrain(train);
            x0 = [5,0.5,10,baseRate];
            lb = [0,0,0,0];ub = [5e2,Inf,Inf,Inf];
@@ -402,7 +320,7 @@ for zz=1:totalUnits
            tempSigmoid(jj,:) = sigmoidParams;
            
            % calculate held-out Poisson deviance
-           temp = S(test,rfInds{unitChannel(zz)})*fhat;
+           temp = S(test,:)*fhat;
            temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
            
            initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
@@ -410,11 +328,11 @@ for zz=1:totalUnits
            tempDev(jj,1) = 2*sum(initialDev);
            
            % rotate the receptive field and recalculate the held-out deviance
-           rf = reshape(fhat,[newDims(unitChannel(zz),1),newDims(unitChannel(zz),2)]);
+           rf = reshape(fhat,[DIM(1),DIM(2)]);
            for kk=2:4
                rf = imrotate(rf,90);
                tempfhat = rf(:);
-               temp = S(test,rfInds{unitChannel(zz)})*tempfhat;
+               temp = S(test,:)*tempfhat;
                temp = sigmoidParams(1)./(1+exp(-(temp-sigmoidParams(2)).*sigmoidParams(3)))+sigmoidParams(4);
                
                initialDev = spikeTrain(test).*log(spikeTrain(test)./temp)-(spikeTrain(test)-temp);
@@ -442,7 +360,7 @@ for zz=1:totalUnits
        fprintf('Fraction of Explained Variance: %3.2f\n\n',1-tempDev(bestMap,1)/dev);
        
        if heldOutExplainedVariance(zz,1) >= 0.05
-           figure();imagesc(reshape(fhat,[newDims(unitChannel(zz),1),newDims(unitChannel(zz),2)]));
+           figure();imagesc(reshape(fhat,[DIM(1),DIM(2)]));
            title(sprintf('%s',EphysFileName(1:end-9)));
        end
        
@@ -456,13 +374,12 @@ for zz=1:totalUnits
 end
 
 % save the results
-fileName = strcat(EphysFileName(1:end-9),'-PseudoInvResults.mat');
-save(fileName,'F','totalUnits','bestLambda',...
+fileName = strcat(EphysFileName(1:end-13),'-PILNPResults.mat');
+save(fileName,'F','totalUnits','bestLambda','totalTime',...
     'reducedSpikeCount','DIM','S','movement',...
     'xaxis','yaxis','reducedMov','allts','strobeData','totalMillisecs',...
     'svStrobed','heldOutDeviance','numStimuli','sigmoidNonlin',...
-    'heldOutExplainedVariance','STA','beta','centerPositions','rfInds',...
-    'newDims','unitChannel','visualResponsiveness');
+    'heldOutExplainedVariance','STA','visualResponsiveness');
 
 % REVERSE CORRELATION SOLUTION
 % for ii=1:numChans
@@ -591,8 +508,8 @@ else
         centerPositions(ii,2) = row;
         
         centerX = xpix(col);centerY = ypix(length(ypix)-row+1);
-        xLow = centerX-600;xHigh = centerX+600;
-        yLow = centerY-600;yHigh = centerY+600;
+        xLow = centerX-1000;xHigh = centerX+1000;
+        yLow = centerY-1000;yHigh = centerY+1000;
         
         [~,xLow] = min(abs(xLow-xaxis));
         [~,xHigh] = min(abs(xHigh-xaxis));
