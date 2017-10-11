@@ -209,7 +209,7 @@ for zz=1:totalUnits
    visualResponsiveness(zz,2) = pVal<0.05;
    
    if visualResponsiveness(zz,2) == 1
-       figure();imagesc(spikeTrain);
+       %figure();imagesc(spikeTrain);
        spikeTrain = sum(spikeTrain(:,50:150),2);
        
        % PCA solution
