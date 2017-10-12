@@ -100,7 +100,7 @@ temp = randperm(numMoviesToDisplay);
 divide = round(0.7*numMoviesToDisplay);
 train = temp(1:divide);test = temp(divide+1:end);clear temp divide;
 
-load(sprintf('%sMovie1.mat',movieType),'DIM');
+load(sprintf('%sMovie1.mat',movieType),'DIM','screenPix_to_effPix');
 
 xaxis = linspace(-round(screenPix_to_effPix*DIM(2)/2)+1,...
     round(screenPix_to_effPix*DIM(2)/2),DIM(2));
@@ -131,27 +131,28 @@ for ii=1:numMoviesToDisplay
     
     S_f = 1./S_f;
     S_f(S_f==inf) = 0;
-    S_f = S_f.^0.25;
+    S_f = S_f.^0.5;
     
     unbiasedS = real(ifftn(fftn(double(S)).*S_f));
-    S = unbiasedS;
+    S = unbiasedS;clear unbiasedS;
+    
+    
+    desiredMin = 0;
+    desiredMax = 255;
+    Grey = 127;%desiredStd = 38;
+    for jj=1:numStimuli
+        temp = S(:,:,jj);
+        currentMax = max(temp(:));
+        currentMin = min(temp(:));
+        temp = (desiredMax-desiredMin)./(currentMax-currentMin).*(temp-currentMax)+desiredMax;
+        difference = mean(temp(:))-Grey;
+        S(:,:,jj) = temp-difference;
+    end
     
     if strcmp(NoiseType,'pinkHC') == 1
-       desiredMin = 0;
-       desiredMax = 255;
-       Grey = 127;%desiredStd = 38;
-       for jj=1:numStimuli
-           temp = S(:,:,jj);
-           currentMax = max(temp(:));
-           currentMin = min(temp(:));
-           temp = (desiredMax-desiredMin)./(currentMax-currentMin).*(temp-currentMax)+desiredMax;
-           difference = mean(temp(:))-Grey;
-           S(:,:,jj) = temp-difference;
-       end
-        
-       topCutoff = 255-whiteBlackCutoff+1;
-       S(S<whiteBlackCutoff) = 0;
-       S(S>=whiteBlackCutoff & S<topCutoff) = 127;S(S>=topCutoff) = 255; 
+        topCutoff = 255-whiteBlackCutoff+1;
+        S(S<whiteBlackCutoff) = 0;
+        S(S>=whiteBlackCutoff & S<topCutoff) = 127;S(S>=topCutoff) = 255;
     end
     currentMovStrobes = find(forMovStrobed==index);
     
@@ -173,6 +174,7 @@ for ii=1:numMoviesToDisplay
         bigcount = bigcount+1;
         lilcount = lilcount+1;
     end
+    clear S;
 end
 
 movieIndices = movieIndices+1;
