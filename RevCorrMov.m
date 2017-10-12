@@ -134,25 +134,28 @@ for ii=1:numMoviesToDisplay
     S_f = S_f.^0.5;
     
     unbiasedS = real(ifftn(fftn(double(S)).*S_f));
-    S = unbiasedS;clear unbiasedS;
-    
     
     desiredMin = 0;
     desiredMax = 255;
     Grey = 127;%desiredStd = 38;
     for jj=1:numStimuli
-        temp = S(:,:,jj);
+        temp = unbiasedS(:,:,jj);
         currentMax = max(temp(:));
         currentMin = min(temp(:));
         temp = (desiredMax-desiredMin)./(currentMax-currentMin).*(temp-currentMax)+desiredMax;
         difference = mean(temp(:))-Grey;
-        S(:,:,jj) = temp-difference;
+        unbiasedS(:,:,jj) = temp-difference;
     end
     
     if strcmp(NoiseType,'pinkHC') == 1
+        S = unbiasedS;
         topCutoff = 255-whiteBlackCutoff+1;
         S(S<whiteBlackCutoff) = 0;
         S(S>=whiteBlackCutoff & S<topCutoff) = 127;S(S>=topCutoff) = 255;
+        clear unbiasedS;
+    else
+       S = unbiasedS;
+       clear unbiasedS; 
     end
     currentMovStrobes = find(forMovStrobed==index);
     
@@ -166,7 +169,7 @@ for ii=1:numMoviesToDisplay
         temp3(temp2<=0) = 0;
         movieIndices(bigcount,:) = temp3;
         onsetTime = stimTimes(currentMovStrobes(jj));
-        offsetTime = onsetTime+round((1/movie_FrameRate)*timeMultiplier);
+        offsetTime = onsetTime+round((1/movie_FrameRate)*timeMultiplier)-1;
         for kk=1:totalUnits
             reducedSpikeCount(bigcount,kk) = sum(pointProcessSpikes(onsetTime:offsetTime,kk));
         end
@@ -187,9 +190,9 @@ clearvars -except EphysFileName totalUnits numStimuli ...
     timeMultiplier totalTime movieLen movie_FrameRate numMoviesToDisplay ...
     movieTime_Seconds;
 
-STA = cell(totalUnits,1);
+whiteSTA = cell(totalUnits,1);
 for ii=1:totalUnits
-    STA{ii} = zeros(length(taxis),DIM(1)*DIM(2));
+    whiteSTA{ii} = zeros(length(taxis),DIM(1)*DIM(2));
 end
 
 numIter = size(movieIndices,1);
@@ -199,22 +202,28 @@ for ii=1:numIter
     for jj=1:totalUnits
         numSpikes = reducedSpikeCount(ii,jj);
         if numSpikes>0
-            spikeCounts(jj) = spikeCounts(jj)+numSpikes;
-            currentMovie = movieFrames(movieIndices(ii,:),:);
-            STA{jj} = STA{jj}+numSpikes*double(currentMovie);
+            if sum(movieIndices(ii,:)==1) == 0
+                spikeCounts(jj) = spikeCounts(jj)+numSpikes;
+                currentMovie = movieFrames(movieIndices(ii,:),:);
+                whiteSTA{jj} = whiteSTA{jj}+numSpikes.*double(currentMovie);
+            end
         end
     end
 end
 
 for ii=1:totalUnits
-   STA{ii} = STA{ii}./spikeCounts(ii); 
+   whiteSTA{ii} = whiteSTA{ii}./spikeCounts(ii); 
 end
 
-fileName = strcat(EphysFileName(1:end-13),'-CompressData.mat');
-save(fileName,'totalUnits','movieIndices','movieFrames','reducedSpikeCount',...
-    'reducedMov','xaxis','yaxis','taxis','DIM','totalTime','movie_FrameRate',...
+fileName = strcat(EphysFileName(1:end-13),'-WhitenedSTA.mat');
+save(fileName,'totalUnits','xaxis','yaxis','taxis','DIM','totalTime','movie_FrameRate',...
     'movieLen','numMoviesToDisplay','movieTime_Seconds','stimTimes','strobeData',...
-    'svStrobed','STA');
+    'svStrobed','whiteSTA');
+
+% save(fileName,'totalUnits','movieIndices','movieFrames','reducedSpikeCount',...
+%     'reducedMov','xaxis','yaxis','taxis','DIM','totalTime','movie_FrameRate',...
+%     'movieLen','numMoviesToDisplay','movieTime_Seconds','stimTimes','strobeData',...
+%     'svStrobed','STA');
 
 % % REGULARIZED PSEUDO-INVERSE SOLUTION, CREATE CONVOLUTION MATRIX L
 % [centerPositions,rfInds,newDims] = GetRetinoMap(AnimalName,xaxis,yaxis,numChans);
