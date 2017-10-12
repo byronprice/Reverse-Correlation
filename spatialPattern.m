@@ -1,4 +1,4 @@
-function x = spatialPattern(DIM,BETA)
+function [x,y] = spatialPattern(DIM,BETA)
 % function x = spatialPattern(DIM, BETA),
 %
 % This function generates 1/f spatial noise, with a normal error 
@@ -67,3 +67,6 @@ x = ifft2((S_f.^0.5) .* (cos(2*pi*phi)+1i*sin(2*pi*phi)));
 
 % Pick just the real component
 x = real(x);
+
+y = ifft2((cos(2*pi*phi)+1i*sin(2*pi*phi)));
+y = real(y);

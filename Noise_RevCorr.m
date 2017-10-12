@@ -117,18 +117,27 @@ end
 Grey = 127;
 DIM = [effectivePixels(1),effectivePixels(2)];
 S = zeros(numStimuli,DIM(1)*DIM(2),'uint8');
+unbiasedS = zeros(numStimuli,DIM(1)*DIM(2),'uint8');
 % below pink noise from Jon Yearsley, 1/f noise generate spatial data
 
 for ii=1:numStimuli
-    X = spatialPattern([DIM(2),DIM(1)],beta);
+    [X,Y] = spatialPattern([DIM(2),DIM(1)],beta);
     X = X-min(min(X));
     X = (X./max(max(X))).*255;
-    Y = X(:);
-    meanVal = mean(Y);difference = meanVal-Grey;
+    Z = X(:);
+    meanVal = mean(Z);difference = meanVal-Grey;
     %figure();imagesc(reshape(Y-difference,DIM));
-    S(ii,:) = Y-difference;
+    S(ii,:) = Z-difference;
+    
+    Y = Y-min(min(Y));
+    Y = (Y./max(max(Y))).*255;
+    Z = Y(:);
+    meanVal = mean(Z);difference = meanVal-Grey;
+    %figure();imagesc(reshape(Y-difference,DIM));
+    unbiasedS(ii,:) = Z-difference;
 end
 S = uint8(S);
+unbiasedS = uint8(unbiasedS);
 % Sdisplay = S;
 % Sdisplay(S<60) = 0;Sdisplay(S>=60 & S<196) = 127;Sdisplay(S>=196) = 255;
 
@@ -198,7 +207,8 @@ Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseStim%s%d_%d.mat',NoiseType,Date,AnimalName);
 save(filename,'S','numStimuli','flipInterval','effectivePixels',...
     'DistToScreen','screenPix_to_effPix','minPix','NoiseType',...
-    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq','maxPix','test','train');
+    'conv_factor','WaitTimes','beta','DIM','spatialSampleFreq',...
+    'maxPix','test','train','unbiasedS');
 end
 
 function gammaTable = makeGrayscaleGammaTable(gamma,blackSetPoint,whiteSetPoint)
