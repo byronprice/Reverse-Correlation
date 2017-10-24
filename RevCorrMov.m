@@ -148,13 +148,13 @@ for ii=1:numMoviesToDisplay
     end
     
     if strcmp(NoiseType,'pinkHC') == 1
-        S = unbiasedS;
+        %S = unbiasedS;
         topCutoff = 255-whiteBlackCutoff+1;
         S(S<whiteBlackCutoff) = 0;
         S(S>=whiteBlackCutoff & S<topCutoff) = 127;S(S>=topCutoff) = 255;
         clear unbiasedS;
     else
-       S = unbiasedS;
+       %S = unbiasedS;
        clear unbiasedS; 
     end
     currentMovStrobes = find(forMovStrobed==index);
@@ -190,9 +190,9 @@ clearvars -except EphysFileName totalUnits numStimuli ...
     timeMultiplier totalTime movieLen movie_FrameRate numMoviesToDisplay ...
     movieTime_Seconds;
 
-whiteSTA = cell(totalUnits,1);
+biasSTA = cell(totalUnits,1);
 for ii=1:totalUnits
-    whiteSTA{ii} = zeros(length(taxis),DIM(1)*DIM(2));
+    biasSTA{ii} = zeros(length(taxis),DIM(1)*DIM(2));
 end
 
 numIter = size(movieIndices,1);
@@ -205,20 +205,20 @@ for ii=1:numIter
             if sum(movieIndices(ii,:)==1) == 0
                 spikeCounts(jj) = spikeCounts(jj)+numSpikes;
                 currentMovie = movieFrames(movieIndices(ii,:),:);
-                whiteSTA{jj} = whiteSTA{jj}+numSpikes.*double(currentMovie);
+                biasSTA{jj} = biasSTA{jj}+numSpikes.*double(currentMovie);
             end
         end
     end
 end
 
 for ii=1:totalUnits
-   whiteSTA{ii} = whiteSTA{ii}./spikeCounts(ii); 
+   biasSTA{ii} = biasSTA{ii}./spikeCounts(ii); 
 end
 
-fileName = strcat(EphysFileName(1:end-13),'-WhitenedSTA.mat');
+fileName = strcat(EphysFileName(1:end-13),'-BiasSTA.mat');
 save(fileName,'totalUnits','xaxis','yaxis','taxis','DIM','totalTime','movie_FrameRate',...
     'movieLen','numMoviesToDisplay','movieTime_Seconds','stimTimes','strobeData',...
-    'svStrobed','whiteSTA');
+    'svStrobed','biasSTA');
 
 % save(fileName,'totalUnits','movieIndices','movieFrames','reducedSpikeCount',...
 %     'reducedMov','xaxis','yaxis','taxis','DIM','totalTime','movie_FrameRate',...
