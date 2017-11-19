@@ -19,7 +19,7 @@ X = real(ifftn(tempFFT));
 % get unbiased movie
 S_f = 1./S_f;
 S_f(S_f==inf) = 0;
-S_f = S_f.^0.25;
+S_f = S_f.^0.5;
 
 desiredMin = 0;
 desiredMax = 255;
