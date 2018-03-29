@@ -230,7 +230,7 @@ for ii=2:burnIn
         sigma = halfSigma'*halfSigma;
         
         Z = inv(tril(W'*W)')'*W';
-        W = sigma*Z'*inv(triu(Z*sigma*Z'));
+        W = (sigma*Z')/triu(Z*sigma*Z');
         W = normc(W);
         eigenvals = diag(W'*sigma*W);
         
