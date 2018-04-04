@@ -1,21 +1,19 @@
-function [] = firingsmda2mat()
+function [] = firingsmda2mat(directory)
 % convert the firings.mda file output from MountainSort back to MATLAB
 %  format for data analysis
-directory = '/home/byron/CloudStation/ByronExp/NoiseRetino/';
 
-fileID = fopen('fileName.txt','r');
-fileName1 = fscanf(fileID,'%s');
+% fileID = fopen('fileName.txt','r');
+% fileName1 = fscanf(fileID,'%s');
 
-cd output
+cd directory
 
-folders = dir('ms3*');
-numFolders = length(folders);
+files = dir('firing*.mda');
+numFiles = length(files);
 
-spikeTimes = cell(numFolders,1);
+spikeTimes = cell(numFiles,1);
 totalUnits = 0;
-for ii=1:numFolders
-    cd(folders(ii).name);
-    firingFile = sprintf('firings.mda');
+for ii=1:numFiles
+    firingFile = files(ii).name;
     A = readmda(firingFile);
     
     channels = unique(A(1,:));
@@ -38,15 +36,13 @@ for ii=1:numFolders
             count = count+1;
         end
     end
-    
-    cd ..
 end
-!rm -r ms3*
 
-cd(directory);
+clearvars -except spikeTimes numFiles
 
-clearvars -except spikeTimes fileName1 numFolders
+!cd ..
 
+fileName1 = strcat(directory,'-mda.mat');
 load(fileName1)
 
 % convert from pseudo event times to experimental time
@@ -54,7 +50,7 @@ newts = cell(totalUnits,1);
 newwaves = cell(totalUnits,1);
 
 count = 1;
-for ii=1:numFolders
+for ii=1:numFiles
    spikeTimeTempArray = spikeTimes{ii};
    numUnits = size(spikeTimeTempArray,1);
    

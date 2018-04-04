@@ -7,6 +7,8 @@ elseif nargin == 2
     directory = pwd;
 end
 
+cd(directory);
+
 readall(fileName);pause(1);
 
 load(strcat(fileName(1:end-4),'.mat'),'allts','allwaves',...
@@ -39,19 +41,43 @@ end
 allts = temp;
 allwaves = temp2;
 
-clear temp temp2;
+numUniqueUnits = totalUnits/chansPerTrode;
 
-allEventTimes = cell(totalUnits,1);
-for ii=1:totalUnits
-   waves = allwaves{ii}; 
-   waves = waves'; % number of samples in the snippet by number of events,
-            % if a tetrode, should be 4 by number of samples by number of
-            % events
-   tmpwaves = reshape(waves,[chansPerTrode,size(waves,1),size(waves,2)]);
-   clear waves;
+newwaves = cell(numUniqueUnits,1);
+newts = cell(numUniqueUnits,1);
+count = 1;
+for ii=1:numUniqueUnits
+    times = allts{count};
+    waves = allwaves{count};
+    waves = waves';
+    [numSamples,numEvents] = size(waves);
+    fullWaves = zeros(chansPerTrode,numSamples,numEvents);
+    for jj=1:chansPerTrode
+        waves = allwaves{count};
+        waves = waves';
+        fullWaves(jj,:,:) = waves;
+        count = count+1;
+    end
+    newwaves{ii} = fullWaves;
+    newts{ii} = times;
+end
+
+allwaves = newwaves;
+allts = newts;
+clear temp temp2 newwaves totalUnits fullWaves newts;
+
+allEventTimes = cell(numUniqueUnits,1);
+for ii=1:numUniqueUnits
+%    waves = allwaves{ii}; 
+%    waves = waves'; % number of samples in the snippet by number of events,
+%             % if a tetrode, should be 4 by number of samples by number of
+%             % events
+%    tmpwaves = reshape(waves,[chansPerTrode,size(waves,1),size(waves,2)]);
+%    clear waves;
+   tmpwaves = allwaves{ii};
    
    [peaks,i] = min(tmpwaves,[],2); % i is the column index of the peak of each channel
-   [maxpeak,j] =min(peaks,[],1); % j is the row index of the peak across channel peaks
+   [maxpeak,j] = min(peaks,[],1); % j is the row index of the peak across channel peaks
    
    % use j to index i, find the index of the peak of each waveform across channels
    j = reshape(j,1,size(j,3));
