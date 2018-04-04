@@ -65,6 +65,8 @@ end
 allwaves = newwaves;
 allts = newts;
 clear temp temp2 newwaves totalUnits fullWaves newts;
+mkdir(sprintf('%s',fileName(1:end-4)));
+cd(sprintf('%s',fileName(1:end-4)));
 
 allEventTimes = cell(numUniqueUnits,1);
 for ii=1:numUniqueUnits
@@ -91,18 +93,19 @@ for ii=1:numUniqueUnits
    event_times=peak_inds+(0:size(tmpwaves,3)-1)*2*npw;
    event_times = int32(event_times);
    
-   allEventTimes{ii} = event_times;
-   if ~exist(sprintf('%s.mda',fileName(1:end-4)),'dir')
-       mkdir(sprintf('%s.mda',fileName(1:end-4)))
-   end
-   cd(sprintf('%s.mda',fileName(1:end-4)));
+%    allEventTimes{ii} = event_times;
+%    if ~exist(sprintf('%s.mda',fileName(1:end-4)),'dir')
+%        mkdir(sprintf('%s.mda',fileName(1:end-4)))
+%    end
+%    cd(sprintf('%s',fileName(1:end-4)));
    
    %write mda files
    writemda(event_times,sprintf('event_times.nt%02d.mda',ii),'int32');
    writemda(raw,sprintf('raw.nt%02d.mda',ii),'float64');
    
-   cd(directory);
 end
+
+cd(directory);
 
 clear ii i j jj q raw event_times tmpwaves maxpeak peak_inds peaks
 
