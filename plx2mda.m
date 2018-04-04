@@ -9,14 +9,14 @@ end
 
 cd(directory);
 
-readall(fileName);pause(1);
+if exist(strcat(fileName(1:end-4),'.mat'),'file') ~= 2
+    readall(fileName);
+    pause(1);
+end
 
 load(strcat(fileName(1:end-4),'.mat'),'allts','allwaves',...
-    'wfcounts','Freq','nunits1','npw','allad','svStrobed','tsevs','adfreqs');
-
-index = regexp(fileName,'_');
-Date = fileName(index-8:index-1);
-AnimalName = fileName(index+1:end-4);
+    'wfcounts','Freq','nunits1','npw','allad','svStrobed','tsevs',...
+    'adfreqs','DateTime');
 
 % REORGANIZE SPIKING DATA
 temp = ~cellfun(@isempty,allts);
@@ -65,6 +65,7 @@ end
 allwaves = newwaves;
 allts = newts;
 clear temp temp2 newwaves totalUnits fullWaves newts;
+
 mkdir(sprintf('%s',fileName(1:end-4)));
 cd(sprintf('%s',fileName(1:end-4)));
 
@@ -93,7 +94,8 @@ for ii=1:numUniqueUnits
    event_times=peak_inds+(0:size(tmpwaves,3)-1)*2*npw;
    event_times = int32(event_times);
    
-%    allEventTimes{ii} = event_times;
+   allEventTimes{ii} = event_times;
+   
 %    if ~exist(sprintf('%s.mda',fileName(1:end-4)),'dir')
 %        mkdir(sprintf('%s.mda',fileName(1:end-4)))
 %    end
