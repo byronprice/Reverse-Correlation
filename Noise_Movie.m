@@ -38,12 +38,12 @@ load('MovieNoiseVars.mat');
 % for motion-contingent display / interaction with recording computer
 startEXP = 254;
 endEXP = 255;
-
-tcpipClient = tcpip('128.197.59.169',30000,'NetworkRole','client');
-bufferSize = 50000; % bytes, (we won't need this much)
-set(tcpipClient,'InputBufferSize',bufferSize);
-set(tcpipClient,'Timeout',5);
-fopen(tcpipClient);
+% 
+% tcpipClient = tcpip('128.197.59.169',30000,'NetworkRole','client');
+% bufferSize = 50000; % bytes, (we won't need this much)
+% set(tcpipClient,'InputBufferSize',bufferSize);
+% set(tcpipClient,'Timeout',5);
+% fopen(tcpipClient);
 
 % Acquire a handle to OpenGL, so we can use OpenGL commands in our code:
 global GL;
@@ -89,21 +89,22 @@ flipInterval = 1/movie_FrameRate-deltaIFI;
 movieNums = random('Discrete Uniform',250,[numMoviesToDisplay,1]);
 
 usb.startRecording;WaitSecs(1);usb.strobeEventWord(0);
-WaitSecs(30);
+WaitSecs(3);
 usb.strobeEventWord(startEXP);WaitSecs(1);
 count = 1;
 while count<=numMoviesToDisplay
-    if tcpipClient.BytesAvailable > 0
-        data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
-        if sum(data) > 0
-            WaitSecs(5);
-            fprintf('Motion Pause ...\n');
-        else
+%     if tcpipClient.BytesAvailable > 0
+%         data = fread(tcpipClient,tcpipClient.BytesAvailable/8,'double');
+%         if sum(data) > 0
+%             WaitSecs(5);
+%             fprintf('Motion Pause ...\n');
+%         else
             index = movieNums(count);
-            load(sprintf('12Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
+            load(sprintf('13Sec_PinkNoiseMovie%d.mat',index),'S','numStimuli');
 %                 S(S<60) = 0;S(S>=60 & S<196) = 127;S(S>=196) = 255;
             vbl = Screen('Flip',win);
             tt = 1;
+            usb.strobeEventWord(index);
             while tt <= numStimuli
                 %     Img = uint8(kron(single(S(:,:,tt)),ones(screenPix_to_effPix)));
                 % Img = S(:,:,tt);Img = Img(newInds);
@@ -111,7 +112,7 @@ while count<=numMoviesToDisplay
                 tex = Screen('MakeTexture',win,S(:,:,tt));
                 Screen('DrawTexture',win, tex,[],destRect,[],0); % 0 is nearest neighbor
                 % 1 is bilinear filter
-                vbl = Screen('Flip',win,vbl+flipInterval);usb.strobeEventWord(index);
+                vbl = Screen('Flip',win,vbl+flipInterval);
                 Screen('Close',tex);
                 tt = tt+1;
             end
@@ -122,8 +123,8 @@ while count<=numMoviesToDisplay
             waitTime = 10+normrnd(0,1);
             vbl = Screen('Flip', win,vbl+waitTime);
             count = count+1;
-        end
-    end
+%         end
+%     end
 end
 Screen('Flip',win);usb.strobeEventWord(0);
 usb.strobeEventWord(endEXP);
@@ -135,7 +136,7 @@ Screen('CloseAll');
 Priority(0);
 
 movieType = '12Sec_PinkNoise';
-whiteBlackCutoff = 60;
+% whiteBlackCutoff = 60;
 Date = datetime('today','Format','yyyy-MM-dd');
 Date = char(Date); Date = strrep(Date,'-','');Date = str2double(Date);
 filename = sprintf('NoiseMovieStim%s%d_%d.mat','pink',Date,AnimalName);
